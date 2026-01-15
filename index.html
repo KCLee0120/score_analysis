@@ -601,41 +601,42 @@
     }
 
     // Role Setup with Smart Detection
-    async function setupUserRole(user) {
+    async function checkAndAssignRole(user) {
         const uid = user.uid; 
         const email = user.email; 
         const userRef = ref(db, `users/${uid}`);
         
-        try { 
-            // Regex for student email: starts with 's', followed by alphanumerics (e.g., s20s10022)
-            // UPDATED: Now accepts letters inside the ID (e.g., s20s10022)
-            const studentPattern = /^(s[a-zA-Z0-9]+)@yenching\.edu\.hk$/i;
-            const match = email.match(studentPattern);
-            
-            if (match) {
-                // It matches the student email format
-                const sid = match[1].toLowerCase(); // Extract ID
-                
-                // VALIDATION: Check 'students' database
-                const studentRecordRef = ref(db, `students/${sid}`);
-                const studentRecordSnap = await get(studentRecordRef);
+        // 1. Check if user already exists and has a role
+        const userSnap = await get(userRef);
+        const userData = userSnap.val();
 
-                if (studentRecordSnap.exists()) {
-                    // Valid student found -> Force role to 'student' (Fixes wrong role if exists)
-                    // We use 'update' to ensure we overwrite any existing wrong role
-                    await update(userRef, { role: 'student', linkedStudentId: sid }); 
-                } else {
-                    // Email looks like student, but ID not in DB -> Reject
-                    throw new Error("STUDENT_NOT_FOUND");
-                }
-            } else { 
-                // Does NOT match student format -> Assume Teacher
-                // Force role to 'teacher'
-                await update(userRef, { role: 'teacher', linkedStudentId: null }); 
-            } 
-        } catch (e) {
-            console.error("Role setup error:", e);
-            throw e; // Rethrow to be caught by onAuthStateChanged
+        if (userData && userData.role === 'teacher') {
+            return 'teacher';
+        }
+
+        if (userData && userData.role === 'student') {
+            // Already identified as student
+            return 'student';
+        }
+
+        // 2. If not a teacher (or first time), treat as student candidate
+        // Extract potential student ID (everything before @)
+        // e.g. s20s10022@yenching.edu.hk -> s20s10022
+        const studentId = email.split('@')[0].toLowerCase(); 
+
+        // 3. Check if this ID exists in 'students' database
+        const studentRecordRef = ref(db, `students/${studentId}`);
+        const studentRecordSnap = await get(studentRecordRef);
+
+        if (studentRecordSnap.exists()) {
+            // Valid student found in DB
+            // We write/update the user record to ensure it's marked as student
+            // This handles first time login AND correcting role if previously wrong
+            await set(userRef, { role: 'student', linkedStudentId: studentId }); 
+            return 'student';
+        } else {
+            // Not a teacher in DB, and Student ID not found in students list
+            throw new Error("UNREGISTERED_USER");
         }
     }
 
@@ -685,29 +686,27 @@
             // -----------------------------------------------------------
             if (!user.email.endsWith('@yenching.edu.hk')) {
                 await signOut(auth); 
-                showMsg("存取被拒", "本系統僅限使用學校帳戶 (@yenching.edu.hk) 登入。\n\n您的非學校帳戶已自動登出。");
+                showMsg("存取被拒 (Access Denied)", "本系統僅限使用學校帳戶 (@yenching.edu.hk) 登入。\n\n您的非學校帳戶已自動登出。");
                 return; 
             }
 
             try {
-                await setupUserRole(user); 
+                // Determine Role
+                const role = await checkAndAssignRole(user);
+                
                 document.getElementById('loginScreen').classList.add('d-none');
                 
-                // Unified Login Logic
-                // UPDATED: Regex to match alphanumeric student IDs
-                const studentEmailPattern = /^s[a-zA-Z0-9]+@yenching\.edu\.hk$/i;
-                
-                if (studentEmailPattern.test(user.email)) {
-                     initStudentView(user); 
-                } else { 
+                if (role === 'teacher') {
                      initTeacherView(); 
+                } else if (role === 'student') {
+                     initStudentView(user); 
                 } 
             } catch (error) {
                 // Handle Validation Errors (e.g. Student not in DB)
                 await signOut(auth); // Ensure they are logged out
                 
-                if (error.message === "STUDENT_NOT_FOUND") {
-                    showMsg("登入失敗", "資料庫沒有該學生紀錄。\n\n請確認您是否使用正確的學生帳戶，或聯絡老師新增資料。");
+                if (error.message === "UNREGISTERED_USER") {
+                    showMsg("登入失敗", "您的帳戶未能識別為教師或學生。\n\n如果您是學生，請確認您的學號已在系統中。\n如果您是教師，請聯絡管理員開通權限。");
                 } else {
                     showMsg("系統錯誤", "設定使用者身分時發生錯誤，請稍後再試。\n\n" + error.message);
                 }
