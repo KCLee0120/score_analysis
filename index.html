@@ -669,6 +669,15 @@
 
     onAuthStateChanged(auth, async (user) => {
         if(user) { 
+            // -----------------------------------------------------------
+            // Security Guard: Restrict to @yenching.edu.hk domain ONLY
+            // -----------------------------------------------------------
+            if (!user.email.endsWith('@yenching.edu.hk')) {
+                await signOut(auth); // Immediately sign out unauthorized users
+                showMsg("存取被拒", "本系統僅限使用學校帳戶 (@yenching.edu.hk) 登入。\n\n您的非學校帳戶已自動登出。");
+                return; // Stop execution
+            }
+
             await setupUserRole(user); 
             document.getElementById('loginScreen').classList.add('d-none');
             
