@@ -607,40 +607,32 @@
         const userRef = ref(db, `users/${uid}`);
         
         try { 
-            const snap = await get(userRef); 
-            
-            // Regex to check if it's a student email (s + digits)
-            // Use case-insensitive check just in case
-            const studentPattern = /^(s\d+)@yenching\.edu\.hk$/i;
+            // Regex for student email: starts with 's', followed by alphanumerics (e.g., s20s10022)
+            // UPDATED: Now accepts letters inside the ID (e.g., s20s10022)
+            const studentPattern = /^(s[a-zA-Z0-9]+)@yenching\.edu\.hk$/i;
             const match = email.match(studentPattern);
             
-            if (!snap.exists()) { 
-                // --- First time login logic ---
-                if (match) { 
-                    const sid = match[1].toLowerCase(); // Extract 's12345' part
-                    
-                    // VALIDATION STEP: Check if this student ID exists in 'students' database
-                    const studentRecordRef = ref(db, `students/${sid}`);
-                    const studentRecordSnap = await get(studentRecordRef);
+            if (match) {
+                // It matches the student email format
+                const sid = match[1].toLowerCase(); // Extract ID
+                
+                // VALIDATION: Check 'students' database
+                const studentRecordRef = ref(db, `students/${sid}`);
+                const studentRecordSnap = await get(studentRecordRef);
 
-                    if (studentRecordSnap.exists()) {
-                        // Valid student found in DB -> Create User
-                        await set(userRef, { role: 'student', linkedStudentId: sid }); 
-                    } else {
-                        // Student ID extraction valid, but NOT found in our DB list
-                        throw new Error("STUDENT_NOT_FOUND");
-                    }
-                } else { 
-                    // Teacher (Not starting with 's' + digits, assuming valid teacher based on domain)
-                    await set(userRef, { role: 'teacher' }); 
-                } 
-            } else {
-                // Existing user checks (optional maintenance logic)
-                const currentRole = snap.val().role;
-                if (currentRole === 'student' && !studentPattern.test(email)) {
-                    await update(userRef, { role: 'teacher', linkedStudentId: null });
+                if (studentRecordSnap.exists()) {
+                    // Valid student found -> Force role to 'student' (Fixes wrong role if exists)
+                    // We use 'update' to ensure we overwrite any existing wrong role
+                    await update(userRef, { role: 'student', linkedStudentId: sid }); 
+                } else {
+                    // Email looks like student, but ID not in DB -> Reject
+                    throw new Error("STUDENT_NOT_FOUND");
                 }
-            }
+            } else { 
+                // Does NOT match student format -> Assume Teacher
+                // Force role to 'teacher'
+                await update(userRef, { role: 'teacher', linkedStudentId: null }); 
+            } 
         } catch (e) {
             console.error("Role setup error:", e);
             throw e; // Rethrow to be caught by onAuthStateChanged
@@ -702,7 +694,8 @@
                 document.getElementById('loginScreen').classList.add('d-none');
                 
                 // Unified Login Logic
-                const studentEmailPattern = /^s\d+@yenching\.edu\.hk$/i;
+                // UPDATED: Regex to match alphanumeric student IDs
+                const studentEmailPattern = /^s[a-zA-Z0-9]+@yenching\.edu\.hk$/i;
                 
                 if (studentEmailPattern.test(user.email)) {
                      initStudentView(user); 
