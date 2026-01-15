@@ -608,16 +608,34 @@
         
         try { 
             const snap = await get(userRef); 
-            const studentPattern = /^s\d+@/;
+            
+            // Regex to check if it's a student email (s + digits)
+            // Use case-insensitive check just in case
+            const studentPattern = /^(s\d+)@yenching\.edu\.hk$/i;
+            const match = email.match(studentPattern);
             
             if (!snap.exists()) { 
-                if (studentPattern.test(email)) { 
-                    const sid = email.split('@')[0]; 
-                    await set(userRef, { role: 'student', linkedStudentId: sid }); 
+                // --- First time login logic ---
+                if (match) { 
+                    const sid = match[1].toLowerCase(); // Extract 's12345' part
+                    
+                    // VALIDATION STEP: Check if this student ID exists in 'students' database
+                    const studentRecordRef = ref(db, `students/${sid}`);
+                    const studentRecordSnap = await get(studentRecordRef);
+
+                    if (studentRecordSnap.exists()) {
+                        // Valid student found in DB -> Create User
+                        await set(userRef, { role: 'student', linkedStudentId: sid }); 
+                    } else {
+                        // Student ID extraction valid, but NOT found in our DB list
+                        throw new Error("STUDENT_NOT_FOUND");
+                    }
                 } else { 
+                    // Teacher (Not starting with 's' + digits, assuming valid teacher based on domain)
                     await set(userRef, { role: 'teacher' }); 
                 } 
             } else {
+                // Existing user checks (optional maintenance logic)
                 const currentRole = snap.val().role;
                 if (currentRole === 'student' && !studentPattern.test(email)) {
                     await update(userRef, { role: 'teacher', linkedStudentId: null });
@@ -625,6 +643,7 @@
             }
         } catch (e) {
             console.error("Role setup error:", e);
+            throw e; // Rethrow to be caught by onAuthStateChanged
         }
     }
 
@@ -673,25 +692,36 @@
             // Security Guard: Restrict to @yenching.edu.hk domain ONLY
             // -----------------------------------------------------------
             if (!user.email.endsWith('@yenching.edu.hk')) {
-                await signOut(auth); // Immediately sign out unauthorized users
+                await signOut(auth); 
                 showMsg("存取被拒", "本系統僅限使用學校帳戶 (@yenching.edu.hk) 登入。\n\n您的非學校帳戶已自動登出。");
-                return; // Stop execution
+                return; 
             }
 
-            await setupUserRole(user); 
-            document.getElementById('loginScreen').classList.add('d-none');
-            
-            // Unified Login Logic
-            // Determine role based on email pattern or existing user data logic
-            // Assuming student emails start with 's' followed by digits
-            const studentEmailPattern = /^s\d+@yenching\.edu\.hk$/i;
-            const studentPatternGeneric = /^s\d+@/; // Fallback or general pattern
-
-            if (studentEmailPattern.test(user.email) || studentPatternGeneric.test(user.email)) {
-                 initStudentView(user); 
-            } else { 
-                 initTeacherView(); 
-            } 
+            try {
+                await setupUserRole(user); 
+                document.getElementById('loginScreen').classList.add('d-none');
+                
+                // Unified Login Logic
+                const studentEmailPattern = /^s\d+@yenching\.edu\.hk$/i;
+                
+                if (studentEmailPattern.test(user.email)) {
+                     initStudentView(user); 
+                } else { 
+                     initTeacherView(); 
+                } 
+            } catch (error) {
+                // Handle Validation Errors (e.g. Student not in DB)
+                await signOut(auth); // Ensure they are logged out
+                
+                if (error.message === "STUDENT_NOT_FOUND") {
+                    showMsg("登入失敗", "資料庫沒有該學生紀錄。\n\n請確認您是否使用正確的學生帳戶，或聯絡老師新增資料。");
+                } else {
+                    showMsg("系統錯誤", "設定使用者身分時發生錯誤，請稍後再試。\n\n" + error.message);
+                }
+                
+                // Re-show login screen just in case
+                document.getElementById('loginScreen').classList.remove('d-none'); 
+            }
         } else { 
             document.getElementById('loginScreen').classList.remove('d-none'); 
             document.getElementById('teacherApp').classList.add('d-none'); 
