@@ -161,7 +161,7 @@
                 <h3><i class="fas fa-users text-primary"></i> 學生管理</h3>
                 <ul class="nav nav-tabs mb-3" id="studentMgmtTabs" role="tablist">
                     <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#content-student-add"><i class="fas fa-plus-circle me-2"></i>新增/更新學生</button></li>
-                    <li class="nav-item"><button class="nav-link text-warning-emphasis" data-bs-toggle="tab" data-bs-target="#content-student-auth"><i class="fas fa-id-card me-2"></i>批量開戶</button></li>
+                    <!-- Bulk Auth Tab Removed -->
                     <li class="nav-item"><button class="nav-link text-danger" id="tab-student-del" data-bs-toggle="tab" data-bs-target="#content-student-del"><i class="fas fa-trash-alt me-2"></i>批量移除學生</button></li>
                 </ul>
                 <div class="tab-content">
@@ -171,15 +171,7 @@
                             <button class="btn btn-primary" onclick="processImport()">解析並儲存</button>
                         </div>
                     </div>
-                    <div class="tab-pane fade" id="content-student-auth">
-                        <div class="card p-3 border-warning bg-light">
-                            <h5 class="text-warning-emphasis"><i class="fas fa-key me-2"></i>批量建立學生登入帳號</h5>
-                            <div class="alert alert-warning py-2 small">Email: <code>[學號]@yenching.edu.hk</code> / 密碼: <code>YC[學號]</code></div>
-                            <div class="mb-3"><label class="form-label">請輸入學生編號</label><textarea id="authStudentTextarea" class="form-control" rows="5" placeholder="s23001"></textarea></div>
-                            <button class="btn btn-warning" onclick="processBulkAuth()"><i class="fas fa-magic me-2"></i>開始建立帳號</button>
-                            <div id="authProgressLog" class="mt-3 p-2 bg-white border rounded small text-muted" style="max-height: 150px; overflow-y: auto;"></div>
-                        </div>
-                    </div>
+                    <!-- Bulk Auth Content Removed -->
                     <div class="tab-pane fade" id="content-student-del">
                         <div class="card p-3 border-danger bg-light">
                             <h5 class="text-danger">畢業生/離校生資料移除</h5>
@@ -548,8 +540,6 @@
     const analytics = getAnalytics(app);
     const db = getDatabase(app);
     const auth = getAuth(app);
-    const secondaryApp = initializeApp(firebaseConfig, "Secondary");
-    const secondaryAuth = getAuth(secondaryApp);
 
     let currentUser = null, currentSystemYear = "2025-2026", allYears = [], studentsMap = {}, assessmentsMap = {}, combinedAssessmentsMap = {}, enrollmentsMap = {}, groupsMetaMap = {};
     let editingTestId = null;
@@ -606,36 +596,40 @@
         const email = user.email; 
         const userRef = ref(db, `users/${uid}`);
         
-        // 1. Check if user already exists and has a role
-        const userSnap = await get(userRef);
+        let userSnap;
+        try {
+            userSnap = await get(userRef);
+        } catch (err) {
+            console.error("Error reading user profile:", err);
+            // If we can't read our own profile, rules are definitely wrong or init failed
+            throw new Error("READ_USER_FAILED: " + err.message);
+        }
+
         const userData = userSnap.val();
 
-        if (userData && userData.role === 'teacher') {
-            return 'teacher';
-        }
+        if (userData && userData.role === 'teacher') return 'teacher';
+        if (userData && userData.role === 'student') return 'student';
 
-        if (userData && userData.role === 'student') {
-            // Already identified as student
-            return 'student';
-        }
-
-        // 2. If not a teacher (or first time), treat as student candidate
-        // Extract potential student ID (everything before @)
-        // e.g. s20s10022@yenching.edu.hk -> s20s10022
+        // Not identified yet. Check if student.
         const studentId = email.split('@')[0].toLowerCase(); 
-
-        // 3. Check if this ID exists in 'students' database
-        const studentRecordRef = ref(db, `students/${studentId}`);
-        const studentRecordSnap = await get(studentRecordRef);
+        
+        let studentRecordSnap;
+        try {
+            const studentRecordRef = ref(db, `students/${studentId}`);
+            studentRecordSnap = await get(studentRecordRef);
+        } catch (err) {
+            console.error("Error checking student list:", err);
+            // This is the most likely failure point for "Permission Denied" on first login
+            if (err.code === 'PERMISSION_DENIED') {
+                 throw new Error("DB_PERMISSION_DENIED: 無法讀取學生名單。請檢查資料庫規則 (Security Rules) 是否允許已登入用戶讀取 'students' 節點。");
+            }
+            throw err;
+        }
 
         if (studentRecordSnap.exists()) {
-            // Valid student found in DB
-            // We write/update the user record to ensure it's marked as student
-            // This handles first time login AND correcting role if previously wrong
             await set(userRef, { role: 'student', linkedStudentId: studentId }); 
             return 'student';
         } else {
-            // Not a teacher in DB, and Student ID not found in students list
             throw new Error("UNREGISTERED_USER");
         }
     }
@@ -707,6 +701,8 @@
                 
                 if (error.message === "UNREGISTERED_USER") {
                     showMsg("登入失敗", "您的帳戶未能識別為教師或學生。\n\n如果您是學生，請確認您的學號已在系統中。\n如果您是教師，請聯絡管理員開通權限。");
+                } else if (error.message.startsWith("DB_PERMISSION_DENIED")) {
+                    showMsg("系統權限錯誤", error.message);
                 } else {
                     showMsg("系統錯誤", "設定使用者身分時發生錯誤，請稍後再試。\n\n" + error.message);
                 }
@@ -721,7 +717,6 @@
         }
     });
 
-    // Removed old login form listeners
     window.handleLogout = () => signOut(auth);
 
     async function initTeacherView() {
@@ -756,7 +751,6 @@
     window.setSystemYear = async () => { const selected = document.getElementById('yearSelector').value; if(confirm(`確定更改系統預設學年為 "${selected}"？`)) { await update(ref(db, 'system'), { currentYear: selected }); showMsg("設定成功", `預設學年更新為 ${selected}`); } }
 
     window.processImport = async() => { const t = document.getElementById('importTextarea').value; const u={}; let count = 0; t.split('\n').forEach(l=>{ const[i,n]=l.split('\t'); if(i) { u[`students/${i.trim()}`]={name:n.trim(),status:'active'}; count++; } }); await update(ref(db), u); document.getElementById('importTextarea').value = ""; showMsg("匯入成功", `${count} 筆`); };
-    window.processBulkAuth = async () => { const text = document.getElementById('authStudentTextarea').value; if (!text.trim()) return alert("請輸入編號"); const sids = text.trim().split(/[\s,]+/); const logEl = document.getElementById('authProgressLog'); logEl.innerHTML = "Processing...<br>"; showLoading(true); let success = 0, fail = 0; for (const sid of sids) { if (!sid) continue; const email = `${sid}@yenching.edu.hk`; try { const uc = await createUserWithEmailAndPassword(secondaryAuth, email, `YC${sid}`); await set(ref(db, `users/${uc.user.uid}`), { role: 'student', linkedStudentId: sid }); logEl.innerHTML += `<span class="text-success">✔ ${sid}</span><br>`; success++; } catch (e) { logEl.innerHTML += `<span class="text-danger">✘ ${sid}: ${e.code==='auth/email-already-in-use'?'Exists':e.message}</span><br>`; fail++; } logEl.scrollTop = logEl.scrollHeight; } await signOut(secondaryAuth); showLoading(false); showMsg("完成", `成功:${success}, 失敗:${fail}`); };
     window.processBulkDelete = async () => { const text = document.getElementById('deleteStudentTextarea').value; if (!text.trim()) return alert("輸入編號"); const sids = text.trim().split(/[\s,]+/); const updates = {}; let count = 0; sids.forEach(sid => { if(sid && studentsMap[sid]) { updates[`students/${sid}`] = null; count++; } }); if (count === 0) return alert("無效編號"); if (confirm(`刪除 ${count} 名學生？`)) { try { showLoading(true); await update(ref(db), updates); document.getElementById('deleteStudentTextarea').value = ""; showMsg("成功", `已刪除 ${count} 人`); } catch(e) { showMsg("錯誤", e.message); } finally { showLoading(false); } } };
     
     async function renderStudentList() { 
