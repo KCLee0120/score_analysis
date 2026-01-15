@@ -1,0 +1,1961 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>數學成績追蹤與分析系統</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8f9fa; }
+        .sidebar { min-height: 100vh; background-color: #2c3e50; color: white; }
+        /* Fix sidebar link color */
+        .sidebar .nav-link { color: rgba(255,255,255,0.8); cursor: pointer; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { color: white; background-color: #34495e; }
+        
+        .card { border: none; shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .score-input { width: 60px; text-align: center; }
+        /* Style for deduction inputs */
+        .deduction-input { background-color: #fff5f5; color: #dc3545; border-color: #ffc9c9; }
+        .deduction-input:focus { border-color: #dc3545; box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25); }
+        
+        /* Absent Row Styling */
+        tr.absent-row td { background-color: #e9ecef; color: #6c757d; }
+        tr.absent-row input[type="number"] { background-color: #e9ecef; border-color: #ced4da; pointer-events: none; }
+
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.8); z-index: 9999;
+            display: none; justify-content: center; align-items: center;
+        }
+        .accordion-button:not(.collapsed) { background-color: #e7f1ff; color: #0c63e4; }
+        .table-responsive::-webkit-scrollbar { height: 8px; }
+        .table-responsive::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        .chart-container { position: relative; height: 250px; width: 100%; } /* Adjusted height for multi-row charts */
+        .badge-topic { font-size: 0.9em; margin-right: 5px; }
+        .report-section { background-color: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; border-radius: 5px; }
+        
+        .custom-nav-pills .nav-link {
+            border: 1px solid #dee2e6;
+            margin: 0 5px;
+            border-radius: 50rem;
+            color: #495057;
+            background-color: #fff;
+            transition: all 0.3s;
+            padding: 10px 20px;
+        }
+        .custom-nav-pills .nav-link.active {
+            background-color: #0d6efd;
+            color: white;
+            border-color: #0d6efd;
+            box-shadow: 0 4px 6px rgba(13, 110, 253, 0.3);
+        }
+        #tab-student-del.active { background-color: #dc3545; border-color: #dc3545; color: white !important; }
+
+        /* DSE Badge Colors */
+        .badge-dse-5starstar { background-color: #800080; color: white; } 
+        .badge-dse-5star { background-color: #9932cc; color: white; }
+        .badge-dse-5 { background-color: #28a745; color: white; } 
+        .badge-dse-4 { background-color: #20c997; color: white; }
+        .badge-dse-3 { background-color: #0d6efd; color: white; } 
+        .badge-dse-2 { background-color: #ffc107; color: black; } 
+        .badge-dse-1 { background-color: #fd7e14; color: white; } 
+        .badge-dse-U { background-color: #6c757d; color: white; } 
+        .badge-dse-ABS { background-color: #adb5bd; color: white; } 
+        
+        .hiddenRow { padding: 0 !important; }
+        .dse-distribution-container { padding: 15px; background-color: #f8f9fa; border-top: 1px solid #dee2e6; }
+        .student-link { color: #0d6efd; cursor: pointer; text-decoration: none; }
+        .student-link:hover { text-decoration: underline; color: #0a58ca; }
+
+        /* Progress Bar for Stats */
+        .stats-progress { height: 20px; font-size: 0.8rem; }
+        
+        /* Comparison Table Styling */
+        .bg-score-high { background-color: #d1e7dd; color: #0f5132; }
+        .bg-score-mid { background-color: #fff3cd; color: #664d03; }
+        .bg-score-low { background-color: #f8d7da; color: #842029; }
+
+        /* Google Login Button Style */
+        .btn-google-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #dee2e6;
+            background-color: white;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .btn-google-circle:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+            background-color: #f8f9fa;
+        }
+        .btn-google-circle i {
+            font-size: 30px;
+            color: #DB4437; /* Google Red */
+        }
+    </style>
+</head>
+<body>
+
+<div id="loadingOverlay" class="loading-overlay"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>
+
+<!-- Login Screen -->
+<div id="loginScreen" class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+            <div class="card p-5 text-center shadow-lg border-0" style="border-radius: 20px;">
+                <div class="mb-4">
+                    <i class="fas fa-chart-line text-primary fa-3x"></i>
+                </div>
+                <h3 class="mb-2 fw-bold text-dark">數學成績追蹤系統</h3>
+                <p class="text-muted mb-5">請使用學校 Google 帳戶登入</p>
+                
+                <div class="d-flex justify-content-center mb-4">
+                    <button type="button" class="btn btn-google-circle" onclick="loginWithGoogle()" title="使用 Google 帳戶登入">
+                        <i class="fab fa-google"></i>
+                    </button>
+                </div>
+                
+                <div class="small text-muted mt-3">
+                    <i class="fas fa-info-circle me-1"></i> 系統將自動識別教師或學生身分
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main App (Teacher) -->
+<div id="teacherApp" class="container-fluid d-none">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-2 sidebar p-3">
+            <h4 class="text-white mb-4">數學科成績追蹤及分析系統</h4>
+            <div class="mb-3 text-white-50 small">當前學年: <span id="displayCurrentYear" class="fw-bold text-warning">Loading...</span></div>
+            <nav class="nav flex-column">
+                <a class="nav-link active" onclick="showSection('section-students')"><i class="fas fa-users me-2"></i> 學生管理</a>
+                <a class="nav-link" onclick="showSection('section-classes')"><i class="fas fa-chalkboard-teacher me-2"></i> 學年與編班</a>
+                <a class="nav-link" onclick="showSection('section-groups')"><i class="fas fa-layer-group me-2"></i> 數學分組</a>
+                <a class="nav-link" onclick="showSection('section-assessments')"><i class="fas fa-file-alt me-2"></i> 測驗管理</a>
+                <a class="nav-link" onclick="showSection('section-scores')"><i class="fas fa-edit me-2"></i> 成績輸入</a>
+                <a class="nav-link" onclick="showSection('section-analysis')"><i class="fas fa-chart-line me-2"></i> 數據分析</a>
+                <hr class="text-white">
+                <a class="nav-link text-danger" onclick="handleLogout()"><i class="fas fa-sign-out-alt me-2"></i> 登出</a>
+            </nav>
+        </div>
+
+        <!-- Content -->
+        <div class="col-md-10 p-4" style="height: 100vh; overflow-y: auto;">
+            
+            <!-- Section 1: Students -->
+            <div id="section-students" class="content-section">
+                <h3><i class="fas fa-users text-primary"></i> 學生管理</h3>
+                <ul class="nav nav-tabs mb-3" id="studentMgmtTabs" role="tablist">
+                    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#content-student-add"><i class="fas fa-plus-circle me-2"></i>新增/更新學生</button></li>
+                    <li class="nav-item"><button class="nav-link text-warning-emphasis" data-bs-toggle="tab" data-bs-target="#content-student-auth"><i class="fas fa-id-card me-2"></i>批量開戶</button></li>
+                    <li class="nav-item"><button class="nav-link text-danger" id="tab-student-del" data-bs-toggle="tab" data-bs-target="#content-student-del"><i class="fas fa-trash-alt me-2"></i>批量移除學生</button></li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="content-student-add">
+                        <div class="card p-3 border-primary">
+                            <div class="mb-3"><label class="form-label"><strong>大量匯入學生主檔</strong> (格式：學號 [Tab] 姓名)</label><textarea id="importTextarea" class="form-control" rows="5"></textarea></div>
+                            <button class="btn btn-primary" onclick="processImport()">解析並儲存</button>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="content-student-auth">
+                        <div class="card p-3 border-warning bg-light">
+                            <h5 class="text-warning-emphasis"><i class="fas fa-key me-2"></i>批量建立學生登入帳號</h5>
+                            <div class="alert alert-warning py-2 small">Email: <code>[學號]@yenching.edu.hk</code> / 密碼: <code>YC[學號]</code></div>
+                            <div class="mb-3"><label class="form-label">請輸入學生編號</label><textarea id="authStudentTextarea" class="form-control" rows="5" placeholder="s23001"></textarea></div>
+                            <button class="btn btn-warning" onclick="processBulkAuth()"><i class="fas fa-magic me-2"></i>開始建立帳號</button>
+                            <div id="authProgressLog" class="mt-3 p-2 bg-white border rounded small text-muted" style="max-height: 150px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="content-student-del">
+                        <div class="card p-3 border-danger bg-light">
+                            <h5 class="text-danger">畢業生/離校生資料移除</h5>
+                            <div class="mb-3"><label class="form-label">請輸入要移除的學生編號</label><textarea id="deleteStudentTextarea" class="form-control" rows="5"></textarea></div>
+                            <button class="btn btn-danger" onclick="processBulkDelete()">確認移除</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card p-3 mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2"><h5>所有學生列表 (按行政班 - <span id="studentListYearDisplay" class="text-primary">Loading...</span>)</h5><span class="badge bg-secondary" id="totalStudentCount">0 人</span></div>
+                    <div id="studentListContainer" style="max-height: 600px; overflow-y: auto;"><div class="accordion" id="studentListAccordion"></div></div>
+                </div>
+            </div>
+
+            <!-- Section 2: Administrative Classes -->
+            <div id="section-classes" class="content-section d-none">
+                <div class="d-flex justify-content-between mb-3">
+                    <h3><i class="fas fa-chalkboard-teacher text-primary"></i> 學年與編班</h3>
+                    <div class="input-group w-auto">
+                        <span class="input-group-text">操作學年</span>
+                        <select id="yearSelector" class="form-select" onchange="handleYearChange()"></select>
+                        <button class="btn btn-outline-warning" onclick="setSystemYear()" title="設為預設"><i class="fas fa-check me-1"></i>設為預設</button>
+                        <button class="btn btn-outline-secondary" onclick="addNewYear()">+ 新增</button>
+                    </div>
+                </div>
+                <div class="card p-3 mb-4 border-primary">
+                    <h5 class="text-primary">批量匯入行政班資料</h5>
+                    <div class="mb-2"><label class="small text-muted">格式：<strong>學生編號 [Tab] 班別 [Tab] 學號</strong></label><textarea id="importEnrollmentTextarea" class="form-control" rows="3"></textarea></div>
+                    <button class="btn btn-primary btn-sm" onclick="processEnrollmentImport()">更新班級資料</button>
+                </div>
+                <div class="card p-3"><div class="d-flex justify-content-between mb-2"><h5>行政班級名單</h5><button class="btn btn-sm btn-secondary" onclick="loadEnrollments()">重新整理</button></div><div class="accordion" id="classAccordion"></div></div>
+            </div>
+
+            <!-- Section 3: Math Groups -->
+            <div id="section-groups" class="content-section d-none">
+                <div class="d-flex justify-content-between mb-3">
+                    <h3><i class="fas fa-layer-group text-primary"></i> 數學分組管理</h3>
+                    <div class="text-muted fs-5 current-year-display"></div>
+                </div>
+                <div class="row">
+                    <div class="col-md-5">
+                        <div class="card p-3 border-success h-100">
+                            <h5 class="text-success">新增/編輯組別</h5>
+                            <div class="mb-3"><label>學年</label><input type="text" class="form-control current-year-display-input" disabled></div>
+                            <div class="mb-3"><label>組別名稱</label><input type="text" id="targetGroupName" class="form-control" placeholder="Group 1"></div>
+                            
+                            <!-- New Teacher Input -->
+                            <div class="mb-3"><label>任教老師</label><input type="text" id="targetGroupTeacher" class="form-control" placeholder="e.g. 陳大文老師"></div>
+
+                            <!-- Extended Part Checkbox -->
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="groupIsExtended">
+                                <label class="form-check-label fw-bold text-primary" for="groupIsExtended">
+                                    屬於延伸部分 (M1/M2)
+                                </label>
+                                <div class="form-text text-muted small">勾選後將使用延伸部分的 DSE 評級標準 (5** > 85%)</div>
+                            </div>
+
+                            <div class="mb-3"><label>學生編號列表</label><textarea id="groupStudentList" class="form-control" rows="8"></textarea></div>
+                            <button class="btn btn-success w-100" onclick="processGroupAssignment()">儲存設定</button>
+                        </div>
+                    </div>
+                    <div class="col-md-7">
+                        <div class="card p-3 h-100"><h5>現有分組名單</h5><div class="accordion" id="groupAccordion"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 4: Assessments -->
+            <div id="section-assessments" class="content-section d-none">
+                <h3><i class="fas fa-file-alt text-primary"></i> 測驗管理</h3>
+                <div class="card p-3 mb-4 bg-light">
+                    <ul class="nav nav-pills custom-nav-pills nav-fill" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" id="btn-create-test-tab" data-bs-toggle="pill" data-bs-target="#tab-create-test" type="button" onclick="cancelEditTest()">
+                                <i class="fas fa-plus-circle me-2"></i>建立新測驗
+                            </button>
+                        </li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-list-test" onclick="renderAssessmentList()"><i class="fas fa-list me-2"></i>查閱測驗列表</button></li>
+                    </ul>
+                </div>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="tab-create-test">
+                        <div class="card p-4 border-primary">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="text-primary" id="createTestFormTitle">1. 基本資訊</h5>
+                                <button id="btnCancelEdit" class="btn btn-sm btn-outline-secondary d-none" onclick="cancelEditTest()">取消編輯</button>
+                            </div>
+                            <form id="createTestForm">
+                                <div class="row g-3 mb-4">
+                                    <div class="col-md-3"><label>名稱</label><input type="text" id="testName" class="form-control" required></div>
+                                    <div class="col-md-2"><label>學年</label><select id="testYear" class="form-select" onchange="updateGroupDropdownForTest()"></select></div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">目標組別 (按 Ctrl/Cmd 多選)</label>
+                                        <select id="testGroup" class="form-select" multiple size="3" required></select>
+                                    </div>
+                                    <div class="col-md-2"><label>類型</label><select id="testType" class="form-select"><option value="Quiz">小測</option><option value="Uniform Test">統測</option><option value="Exam">考試</option></select></div>
+                                    <div class="col-md-2"><label>題數</label><input type="number" id="testQCount" class="form-control" min="1" max="50" value="5" onchange="renderQuestionInputs()"></div>
+                                </div>
+                                <h5 class="text-primary">2. 題目批量設定</h5>
+                                <div class="card bg-light p-3 mb-4">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-2"><input type="number" id="bulkStart" class="form-control form-control-sm" placeholder="Start Q"></div>
+                                        <div class="col-md-2"><input type="number" id="bulkEnd" class="form-control form-control-sm" placeholder="End Q"></div>
+                                        <div class="col-md-2"><select id="bulkType" class="form-select form-select-sm"><option value="">Type</option><option value="Long">長題目</option><option value="MC">MC</option></select></div>
+                                        <div class="col-md-2"><select id="bulkDiff" class="form-select form-select-sm"><option value="">Diff</option><option value="A">A</option><option value="A1">A1</option><option value="A2">A2</option><option value="B">B</option></select></div>
+                                        <div class="col-md-2"><input type="number" id="bulkScore" class="form-control form-control-sm" placeholder="Score"></div>
+                                        <div class="col-md-2"><button type="button" class="btn btn-warning btn-sm w-100" onclick="applyBulkSettings()">套用</button></div>
+                                        <div class="col-md-2"><input type="text" id="bulkTopic" class="form-control form-control-sm" placeholder="Topic"></div>
+                                        <div class="col-md-2"><input type="text" id="bulkSub" class="form-control form-control-sm" placeholder="Sub"></div>
+                                    </div>
+                                </div>
+                                <div class="table-responsive mb-4">
+                                    <table class="table table-bordered text-center align-middle"><thead class="table-light"><tr><th width="5%">#</th><th width="25%">Topic</th><th width="20%">Sub-topic</th><th width="15%">Type</th><th width="15%">Diff</th><th width="10%">Max</th></tr></thead><tbody id="questionBuilderBody"></tbody></table>
+                                </div>
+                                <button type="submit" id="btnSaveTest" class="btn btn-primary btn-lg w-100">儲存測驗</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="tab-list-test">
+                        <div class="card p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="d-flex align-items-center">
+                                    <label class="me-2 fw-bold">篩選組別:</label>
+                                    <select id="viewTestGroupFilter" class="form-select w-auto me-3" onchange="renderAssessmentList()"><option value="">所有組別</option></select>
+                                    
+                                    <button class="btn btn-sm btn-outline-success" onclick="openCombinedTestModal()">
+                                        <i class="fas fa-object-group me-1"></i>設定合併測驗 (卷一+卷二)
+                                    </button>
+                                </div>
+                                <button class="btn btn-sm btn-secondary" onclick="renderAssessmentList()">重新整理</button>
+                            </div>
+                            <div class="table-responsive mb-3">
+                                <h6 class="text-primary border-bottom pb-2">已建立測驗</h6>
+                                <table class="table table-hover table-striped"><thead class="table-dark"><tr><th>名稱</th><th>學年</th><th>組別</th><th>題目數</th><th>總分</th><th>操作</th></tr></thead><tbody id="assessmentListBody"></tbody></table>
+                            </div>
+                            <!-- Combined List -->
+                            <div class="table-responsive">
+                                <h6 class="text-success border-bottom pb-2">已設定的合併測驗 (Total Score = P1 65% + P2 35%)</h6>
+                                <table class="table table-sm table-hover"><thead class="table-success"><tr><th>合併測驗名稱</th><th>學年</th><th>卷一 (65%)</th><th>卷二 (35%)</th><th>操作</th></tr></thead><tbody id="combinedAssessmentListBody"></tbody></table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 5: Scores -->
+            <div id="section-scores" class="content-section d-none">
+                <h3><i class="fas fa-edit text-primary"></i> 成績輸入</h3>
+                <div class="card p-3 mt-3">
+                    <div class="alert alert-info py-2 small">Tips: 支援 Excel 複製貼上 (Ctrl+V) 批量輸入。紅色欄位 (PP, U, PEN) 請輸入負值以扣分。<br><strong>勾選「缺席」將不計算該生成績。</strong></div>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">選擇學年</label>
+                            <select id="scoreYearSelect" class="form-select" onchange="updateScoreTestSelect()"></select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">選擇測驗</label>
+                            <select id="scoreTestSelect" class="form-select" onchange="loadScoreEntryTable()">
+                                <option value="">請先選擇學年...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="scoreEntryArea" class="table-responsive"></div>
+                    <div class="text-end mt-3"><button class="btn btn-success" onclick="saveScores()">儲存成績</button></div>
+                </div>
+            </div>
+
+            <!-- Section 6: Analysis -->
+            <div id="section-analysis" class="content-section d-none">
+                <h3><i class="fas fa-chart-line text-primary"></i> 數據分析</h3>
+                <div class="card p-3 mb-4 bg-light">
+                    <ul class="nav nav-pills custom-nav-pills nav-fill" role="tablist">
+                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#anal-group-tab"><i class="fas fa-users fa-lg me-2"></i>組別整體分析</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#anal-student-tab"><i class="fas fa-user-graduate fa-lg me-2"></i>個別學生分析</button></li>
+                    </ul>
+                </div>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="anal-group-tab">
+                        <div class="card p-3 mb-3 border-primary">
+                            <div class="row g-3">
+                                <div class="col-md-4"><label>學年</label><select id="analGroupYear" class="form-select" onchange="updateAnalGroupDropdown()"></select></div>
+                                <div class="col-md-4"><label>組別</label><select id="analGroupSelect" class="form-select"></select></div>
+                                <div class="col-md-4 d-flex align-items-center">
+                                    <div class="form-check form-switch me-3" title="開啟後將顯示該測驗所有組別的學生數據">
+                                        <input class="form-check-input" type="checkbox" id="analIncludeAll">
+                                        <label class="form-check-label" for="analIncludeAll">包含測驗所有組別</label>
+                                    </div>
+                                    <button class="btn btn-primary w-100" onclick="performGroupAnalysis()">開始分析</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="groupAnalResult" class="d-none">
+                            <div id="groupOverallStatsContainer" class="mb-4 d-none"></div>
+                            
+                            <!-- 1. Individual Tests -->
+                            <div class="card p-3 mb-4"><h5><i class="fas fa-table me-2"></i>個別測驗詳細數據統計 (含 HKDSE 等級分佈)</h5><div class="table-responsive"><table class="table table-hover table-bordered text-center align-middle"><thead class="table-dark"><tr><th>測驗名稱</th><th>應考/總人數</th><th>滿分</th><th>平均分</th><th>中位數</th><th>最高/最低</th><th>SD</th><th>合格率</th><th>DSE 分佈</th></tr></thead><tbody id="groupAnalTableBody"></tbody></table></div></div>
+                            
+                            <!-- 2. Combined Tests -->
+                            <div id="groupCombinedStatsContainer" class="d-none">
+                                <div class="card p-3 border-success">
+                                    <h5 class="text-success"><i class="fas fa-calculator me-2"></i>合併測驗統計 (統測/考試)</h5>
+                                    <div class="table-responsive">
+                                        <table class="table table-hover table-bordered text-center align-middle">
+                                            <thead class="table-success">
+                                                <tr><th>測驗名稱</th><th>應考/總人數</th><th>滿分</th><th>平均分</th><th>中位數</th><th>最高/最低</th><th>SD</th><th>合格率</th><th>詳細報告</th></tr>
+                                            </thead>
+                                            <tbody id="groupCombinedTableBody"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="anal-student-tab">
+                        <div class="card p-3 mb-3 border-info">
+                            <div class="row g-3">
+                                <div class="col-md-4"><label>選擇學年</label><select id="analStudentYear" class="form-select"></select></div>
+                                <div class="col-md-6"><label>輸入學生編號</label><input type="text" id="analStudentId" class="form-control" placeholder="s23001"></div>
+                                <div class="col-md-2">
+                                    <label>篩選組別 (選填)</label>
+                                    <select id="analStudentGroupFilter" class="form-select"><option value="">所有組別</option></select>
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-info w-100 text-white" onclick="performStudentAnalysis()"><i class="fas fa-search me-2"></i>分析</button></div>
+                            </div>
+                        </div>
+                        <div id="studentAnalResult" class="d-none">
+                            <div class="card p-3 mb-3 border-info shadow-sm"><h4 id="analStudentName" class="text-info fw-bold mb-1"></h4><p id="analStudentInfo" class="text-muted mb-0 small"></p></div>
+                            <div class="report-section mb-4 shadow-sm"><h5 class="text-warning-emphasis fw-bold mb-3">AI 學習診斷報告</h5><div id="aiDiagnosticReport" class="text-dark"></div></div>
+                            <div class="row mb-4">
+                                <div class="col-md-6 mb-4"><div class="card p-3 h-100 shadow-sm"><h5>課題表現</h5><div class="table-responsive" style="max-height: 300px; overflow-y: auto;"><table class="table table-sm table-bordered table-striped"><thead class="table-light sticky-top"><tr><th>課題</th><th>得分/滿分</th><th>%</th></tr></thead><tbody id="studentTopicTable"></tbody></table></div></div></div>
+                                <div class="col-md-6 mb-4"><div class="card p-3 h-100 shadow-sm"><h5>題型表現</h5><div class="chart-container"><canvas id="studentTypeBar"></canvas></div></div></div>
+                                <div class="col-md-6 mb-4"><div class="card p-3 h-100 shadow-sm"><h5>MC題難度表現</h5><div class="chart-container"><canvas id="studentMCDiffChart"></canvas></div></div></div>
+                                <div class="col-md-6 mb-4"><div class="card p-3 h-100 shadow-sm"><h5>長題目難度表現</h5><div class="chart-container"><canvas id="studentLongDiffChart"></canvas></div></div></div>
+                            </div>
+                            <div class="card p-3 shadow-sm"><h5>歷次測驗成績表</h5><table class="table table-striped text-center"><thead><tr><th>測驗名稱</th><th>得分/滿分</th><th>百分比</th><th>DSE 推算</th><th>狀態</th></tr></thead><tbody id="studentScoreTableBody"></tbody></table></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main App (Student) -->
+<div id="studentApp" class="container mt-4 d-none">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="fas fa-user-graduate text-success"></i> 我的學習儀表板</h3>
+        <button class="btn btn-outline-danger" onclick="handleLogout()">登出</button>
+    </div>
+
+    <div class="card p-4 mb-4 border-success shadow-sm">
+        <h4 id="myStudentName" class="text-success fw-bold"></h4>
+        <p id="myStudentInfo" class="text-muted mb-0"></p>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-4">
+             <div class="input-group">
+                <span class="input-group-text"><i class="fas fa-calendar-alt"></i> 學年篩選</span>
+                <select id="myStudentYear" class="form-select"></select>
+            </div>
+        </div>
+        <div class="col-md-4">
+             <div class="input-group">
+                <span class="input-group-text"><i class="fas fa-layer-group"></i> 組別篩選</span>
+                <select id="myStudentGroupFilter" class="form-select"><option value="">所有組別</option></select>
+            </div>
+        </div>
+    </div>
+
+    <div class="report-section mb-4 shadow-sm">
+        <h5 class="text-warning-emphasis fw-bold mb-3"><i class="fas fa-lightbulb me-2"></i>AI 學習診斷報告</h5>
+        <div id="myAiReport" class="text-dark">載入中...</div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6 mb-4"><div class="card p-3 h-100 shadow-sm"><h5>課題表現</h5><div class="table-responsive" style="max-height: 300px; overflow-y: auto;"><table class="table table-sm table-bordered table-striped"><thead class="table-light sticky-top"><tr><th>課題</th><th>得分/滿分</th><th>%</th></tr></thead><tbody id="myTopicTable"></tbody></table></div></div></div>
+        <div class="col-md-6 mb-4"><div class="card p-3 h-100 shadow-sm"><h5>題型表現</h5><div class="chart-container"><canvas id="myTypeBar"></canvas></div></div></div>
+        <div class="col-md-6 mb-4"><div class="card p-3 h-100 shadow-sm"><h5>MC題難度表現</h5><div class="chart-container"><canvas id="myMCDiffChart"></canvas></div></div></div>
+        <div class="col-md-6 mb-4"><div class="card p-3 h-100 shadow-sm"><h5>長題目難度表現</h5><div class="chart-container"><canvas id="myLongDiffChart"></canvas></div></div></div>
+    </div>
+
+    <div class="card p-3 shadow-sm">
+        <h5><i class="fas fa-history me-2"></i>歷次測驗成績表</h5>
+        <table class="table table-striped text-center">
+            <thead><tr><th>測驗名稱</th><th>得分/滿分</th><th>百分比</th><th>DSE 推算</th><th>狀態</th></tr></thead>
+            <tbody id="myScoreTableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Message Modal -->
+<div class="modal fade" id="msgModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title" id="msgTitle">訊息</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body" id="msgBody"></div>
+            <div class="modal-footer"><button type="button" class="btn btn-primary" data-bs-dismiss="modal">確定</button></div>
+        </div>
+    </div>
+</div>
+
+<!-- Combined Test Setup Modal -->
+<div class="modal fade" id="combinedTestModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-calculator me-2"></i>設定合併測驗 (總分計算)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-success small">
+                    <strong>說明：</strong> 此功能將兩份測驗合併計算總分。滿分為 100 分。<br>
+                    <strong>公式：</strong> 總分 = (卷一得分/卷一滿分 × 65) + (卷二得分/卷二滿分 × 35)
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">合併測驗名稱 (例如：第一學期考試)</label>
+                    <input type="text" id="combinedName" class="form-control" placeholder="請輸入名稱">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">學年</label>
+                    <select id="combinedYear" class="form-select" onchange="updateCombinedPaperSelects()"></select>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-primary">卷一 (長題目 - 65%)</label>
+                        <select id="combinedP1" class="form-select"></select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-warning-emphasis">卷二 (MC - 35%)</label>
+                        <select id="combinedP2" class="form-select"></select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" onclick="saveCombinedTest()">儲存設定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap & Charts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-analytics.js";
+    import { getDatabase, ref, set, get, update, remove, onValue } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyCksF63xGP7fq7ZxraeHh4fab4olj2BV_k",
+        authDomain: "yenching-math-analysis.firebaseapp.com",
+        databaseURL: "https://yenching-math-analysis-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "yenching-math-analysis",
+        storageBucket: "yenching-math-analysis.firebasestorage.app",
+        messagingSenderId: "777268324691",
+        appId: "1:777268324691:web:5a5e100bdd7332885699a6",
+        measurementId: "G-KQQ84213GT"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+    const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+    const secondaryAuth = getAuth(secondaryApp);
+
+    let currentUser = null, currentSystemYear = "2025-2026", allYears = [], studentsMap = {}, assessmentsMap = {}, combinedAssessmentsMap = {}, enrollmentsMap = {}, groupsMetaMap = {};
+    let editingTestId = null;
+    
+    // Storage for sorting combined table
+    let currentCombinedData = {}; // cid -> array of student objects
+
+    function showMsg(title, body) { 
+        const el = document.getElementById('msgModal');
+        const modal = bootstrap.Modal.getOrCreateInstance(el);
+        document.getElementById('msgTitle').innerText = title;
+        document.getElementById('msgBody').innerText = body;
+        modal.show();
+    } 
+    function showLoading(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; }
+    window.showSection = (id) => {
+        document.querySelectorAll('.content-section').forEach(el => el.classList.add('d-none'));
+        document.getElementById(id).classList.remove('d-none');
+        if(id==='section-classes') loadEnrollments();
+        if(id==='section-groups') loadGroups();
+        if(id==='section-assessments') updateGroupDropdownForTest();
+        if(id==='section-analysis') updateAnalYearDropdown();
+    };
+
+    // HKDSE Grading Helper (Core)
+    const DSE_CUTOFFS_CORE = [
+        { l: 'Level 5**', m: 92, c: 'badge-dse-5starstar' }, { l: 'Level 5*', m: 85, c: 'badge-dse-5star' },
+        { l: 'Level 5', m: 76, c: 'badge-dse-5' }, { l: 'Level 4', m: 64, c: 'badge-dse-4' },
+        { l: 'Level 3', m: 54, c: 'badge-dse-3' }, { l: 'Level 2', m: 35, c: 'badge-dse-2' },
+        { l: 'Level 1', m: 20, c: 'badge-dse-1' }, { l: 'U', m: 0, c: 'badge-dse-U' }
+    ];
+    // HKDSE Grading Helper (Extended Part)
+    const DSE_CUTOFFS_EXT = [
+        { l: 'Level 5**', m: 85, c: 'badge-dse-5starstar' }, { l: 'Level 5*', m: 75, c: 'badge-dse-5star' },
+        { l: 'Level 5', m: 65, c: 'badge-dse-5' }, { l: 'Level 4', m: 58, c: 'badge-dse-4' },
+        { l: 'Level 3', m: 47, c: 'badge-dse-3' }, { l: 'Level 2', m: 31, c: 'badge-dse-2' },
+        { l: 'Level 1', m: 20, c: 'badge-dse-1' }, { l: 'U', m: 0, c: 'badge-dse-U' }
+    ];
+
+    function getDSELevel(pct, isExtended = false) {
+        const cutoffs = isExtended ? DSE_CUTOFFS_EXT : DSE_CUTOFFS_CORE;
+        const grade = cutoffs.find(g => pct >= g.m);
+        return grade ? { level: grade.l, class: grade.c } : { level: 'U', class: 'badge-dse-U' };
+    }
+    
+    // Pass Threshold
+    function checkPass(pct, isExtended = false) {
+        return pct >= 35;
+    }
+
+    // Role Setup with Smart Detection
+    async function setupUserRole(user) {
+        const uid = user.uid; 
+        const email = user.email; 
+        const userRef = ref(db, `users/${uid}`);
+        
+        try { 
+            const snap = await get(userRef); 
+            const studentPattern = /^s\d+@/;
+            
+            if (!snap.exists()) { 
+                if (studentPattern.test(email)) { 
+                    const sid = email.split('@')[0]; 
+                    await set(userRef, { role: 'student', linkedStudentId: sid }); 
+                } else { 
+                    await set(userRef, { role: 'teacher' }); 
+                } 
+            } else {
+                const currentRole = snap.val().role;
+                if (currentRole === 'student' && !studentPattern.test(email)) {
+                    await update(userRef, { role: 'teacher', linkedStudentId: null });
+                }
+            }
+        } catch (e) {
+            console.error("Role setup error:", e);
+        }
+    }
+
+    // Google Sign-In Provider
+    const googleProvider = new GoogleAuthProvider();
+
+    window.loginWithGoogle = () => {
+        // 1. Check for file:// protocol
+        if (window.location.protocol === 'file:') {
+            showMsg("設定錯誤", 
+                "Firebase Authentication 不支援直接開啟檔案 (file://) 登入。\n\n" +
+                "請使用 VS Code Live Server 或其他網頁伺服器來執行此檔案 (http://localhost:...)。"
+            );
+            return;
+        }
+
+        signInWithPopup(auth, googleProvider)
+            .then((result) => {
+                // Success
+            })
+            .catch((error) => {
+                console.error(error);
+                if (error.code === 'auth/unauthorized-domain') {
+                    // Extract the actual domain from window.location
+                    const currentDomain = window.location.hostname;
+                    
+                    showMsg("設定錯誤 (Unauthorized Domain)", 
+                        `目前的網址為 "${currentDomain}"，但它尚未被加到 Firebase 的授權清單中。\n\n` +
+                        `請依照以下步驟解決：\n` +
+                        `1. 前往 Firebase Console (console.firebase.google.com)\n` +
+                        `2. 進入 Authentication > Settings > Authorized domains\n` +
+                        `3. 點擊 "Add domain" 並複製貼上以下網址：\n\n` +
+                        `${currentDomain}`
+                    );
+                } else if (error.code === 'auth/popup-closed-by-user') {
+                    console.log("User closed login popup");
+                } else {
+                    showMsg("登入錯誤", `錯誤代碼: ${error.code}\n訊息: ${error.message}`);
+                }
+            });
+    };
+
+    onAuthStateChanged(auth, async (user) => {
+        if(user) { 
+            await setupUserRole(user); 
+            document.getElementById('loginScreen').classList.add('d-none');
+            
+            // Unified Login Logic
+            // Determine role based on email pattern or existing user data logic
+            // Assuming student emails start with 's' followed by digits
+            const studentEmailPattern = /^s\d+@yenching\.edu\.hk$/i;
+            const studentPatternGeneric = /^s\d+@/; // Fallback or general pattern
+
+            if (studentEmailPattern.test(user.email) || studentPatternGeneric.test(user.email)) {
+                 initStudentView(user); 
+            } else { 
+                 initTeacherView(); 
+            } 
+        } else { 
+            document.getElementById('loginScreen').classList.remove('d-none'); 
+            document.getElementById('teacherApp').classList.add('d-none'); 
+            document.getElementById('studentApp').classList.add('d-none'); 
+        }
+    });
+
+    // Removed old login form listeners
+    window.handleLogout = () => signOut(auth);
+
+    async function initTeacherView() {
+        document.getElementById('teacherApp').classList.remove('d-none');
+        const handleDbError = (error) => { console.error("DB Error:", error); if(error.code === 'PERMISSION_DENIED') showMsg("權限錯誤", "無法存取資料庫。"); };
+        onValue(ref(db, 'system'), s=>{ const v=s.val(); if(v){ currentSystemYear=v.currentYear; allYears=v.years; updateYearSelectors(); renderStudentList(); } }, handleDbError);
+        onValue(ref(db, 'students'), s=>{ studentsMap=s.val()||{}; renderStudentList(); document.getElementById('totalStudentCount').innerText = `${Object.keys(studentsMap).length} 人`; }, handleDbError);
+        onValue(ref(db, 'assessments'), s=>{ assessmentsMap=s.val()||{}; renderAssessmentList(); updateScoreTestSelect(); }, handleDbError);
+        onValue(ref(db, 'combinedAssessments'), s=>{ combinedAssessmentsMap=s.val()||{}; renderAssessmentList(); }, handleDbError); // NEW Listener
+        onValue(ref(db, 'groups'), s => { groupsMetaMap = s.val() || {}; renderGroupAccordion(); }, handleDbError); // Updated to re-render accordion
+    }
+
+    function updateYearSelectors() { 
+        const els = ['yearSelector', 'testYear', 'analGroupYear', 'analStudentYear', 'myStudentYear', 'scoreYearSelect']; 
+        els.forEach(id => { 
+            const sel = document.getElementById(id); if(!sel)return; 
+            sel.innerHTML = ''; 
+            if (id === 'analStudentYear' || id === 'myStudentYear') sel.innerHTML += `<option value="">所有學年</option>`; 
+            allYears.forEach(y => sel.innerHTML += `<option value="${y}" ${y===currentSystemYear?'selected':''}>${y}</option>`); 
+        }); 
+        updateYearDisplays(); 
+        updateAnalGroupDropdown(); 
+        document.getElementById('displayCurrentYear').innerText = currentSystemYear; 
+        
+        // Trigger update to populate tests for default year
+        updateScoreTestSelect();
+    }
+
+    function updateYearDisplays() { const y = document.getElementById('yearSelector').value; document.querySelectorAll('.current-year-display').forEach(el => el.innerText = `學年：${y}`); document.querySelectorAll('.current-year-display-input').forEach(el => el.value = y); }
+    window.handleYearChange = () => { updateYearDisplays(); loadEnrollments(); loadGroups(); };
+    window.addNewYear = async () => { const input = prompt("請輸入新學年 (格式: YYYY-YYYY):"); if(!input) return; if(allYears.includes(input)) return alert("已存在"); const newYears = [...allYears, input].sort((a,b)=>parseInt(a)-parseInt(b)); try { await update(ref(db, 'system'), { years: newYears }); showMsg("成功", `已新增 ${input}`); } catch(e) { showMsg("錯誤", e.message); } };
+    window.setSystemYear = async () => { const selected = document.getElementById('yearSelector').value; if(confirm(`確定更改系統預設學年為 "${selected}"？`)) { await update(ref(db, 'system'), { currentYear: selected }); showMsg("設定成功", `預設學年更新為 ${selected}`); } }
+
+    window.processImport = async() => { const t = document.getElementById('importTextarea').value; const u={}; let count = 0; t.split('\n').forEach(l=>{ const[i,n]=l.split('\t'); if(i) { u[`students/${i.trim()}`]={name:n.trim(),status:'active'}; count++; } }); await update(ref(db), u); document.getElementById('importTextarea').value = ""; showMsg("匯入成功", `${count} 筆`); };
+    window.processBulkAuth = async () => { const text = document.getElementById('authStudentTextarea').value; if (!text.trim()) return alert("請輸入編號"); const sids = text.trim().split(/[\s,]+/); const logEl = document.getElementById('authProgressLog'); logEl.innerHTML = "Processing...<br>"; showLoading(true); let success = 0, fail = 0; for (const sid of sids) { if (!sid) continue; const email = `${sid}@yenching.edu.hk`; try { const uc = await createUserWithEmailAndPassword(secondaryAuth, email, `YC${sid}`); await set(ref(db, `users/${uc.user.uid}`), { role: 'student', linkedStudentId: sid }); logEl.innerHTML += `<span class="text-success">✔ ${sid}</span><br>`; success++; } catch (e) { logEl.innerHTML += `<span class="text-danger">✘ ${sid}: ${e.code==='auth/email-already-in-use'?'Exists':e.message}</span><br>`; fail++; } logEl.scrollTop = logEl.scrollHeight; } await signOut(secondaryAuth); showLoading(false); showMsg("完成", `成功:${success}, 失敗:${fail}`); };
+    window.processBulkDelete = async () => { const text = document.getElementById('deleteStudentTextarea').value; if (!text.trim()) return alert("輸入編號"); const sids = text.trim().split(/[\s,]+/); const updates = {}; let count = 0; sids.forEach(sid => { if(sid && studentsMap[sid]) { updates[`students/${sid}`] = null; count++; } }); if (count === 0) return alert("無效編號"); if (confirm(`刪除 ${count} 名學生？`)) { try { showLoading(true); await update(ref(db), updates); document.getElementById('deleteStudentTextarea').value = ""; showMsg("成功", `已刪除 ${count} 人`); } catch(e) { showMsg("錯誤", e.message); } finally { showLoading(false); } } };
+    
+    async function renderStudentList() { 
+        if (!currentSystemYear) return; document.getElementById('studentListYearDisplay').innerText = currentSystemYear;
+        const snap = await get(ref(db, `enrollments/${currentSystemYear}`)); const enrolls = snap.val() || {}; const grouped = {}; const UN = "待編班";
+        Object.entries(studentsMap).forEach(([sid, data]) => { const en = enrolls[sid]; const cls = en && en.homeClass ? en.homeClass : UN; const no = en && en.classNo ? en.classNo : 999; if (!grouped[cls]) grouped[cls] = []; grouped[cls].push({ sid, ...data, classNo: no }); });
+        const sortedClasses = Object.keys(grouped).sort((a,b) => (a===UN?1:b===UN?-1:a.localeCompare(b)));
+        const acc = document.getElementById('studentListAccordion'); acc.innerHTML = ''; let totalCount = 0;
+        sortedClasses.forEach((cls, idx) => {
+            const studs = grouped[cls].sort((a,b) => (a.classNo - b.classNo)); totalCount += studs.length; const id = `sl_${idx}`;
+            let rows = studs.map(s => `<tr><td>${s.sid}</td><td>${s.name}</td><td>${s.classNo === 999 ? '-' : s.classNo}</td><td><span class="badge bg-${s.status==='active'?'success':'secondary'}">${s.status}</span></td><td>-</td></tr>`).join('');
+            acc.innerHTML += `<div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${id}"><strong>${cls}</strong> <span class="badge bg-secondary ms-2">${studs.length}</span></button></h2><div id="${id}" class="accordion-collapse collapse" data-bs-parent="#studentListAccordion"><div class="accordion-body p-0"><table class="table table-sm table-striped mb-0"><thead><tr><th>學號</th><th>姓名</th><th>班號</th><th>狀態</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+        });
+        document.getElementById('totalStudentCount').innerText = `${totalCount} 人`;
+    }
+
+    window.loadEnrollments = () => onValue(ref(db, `enrollments/${document.getElementById('yearSelector').value}`), s=>{ enrollmentsMap=s.val()||{}; renderClassAccordion(); renderGroupAccordion(); }, {onlyOnce:true});
+    window.processEnrollmentImport = async() => { const y = document.getElementById('yearSelector').value, u={}; document.getElementById('importEnrollmentTextarea').value.split('\n').forEach(l=>{ const[s,c,n]=l.split(/[ \t]+/); if(s){u[`enrollments/${y}/${s}/homeClass`]=c;u[`enrollments/${y}/${s}/classNo`]=Number(n)||0;} }); await update(ref(db), u); loadEnrollments(); };
+    function renderClassAccordion() { const g={}; Object.keys(studentsMap).forEach(s=>{const c=enrollmentsMap[s]?.homeClass||"未分班"; if(!g[c])g[c]=[]; g[c].push({s,...studentsMap[s],...enrollmentsMap[s]})}); document.getElementById('classAccordion').innerHTML = Object.keys(g).sort().map((c,i)=>`<div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#c${i}">${c} (${g[c].length})</button></h2><div id="c${i}" class="accordion-collapse collapse"><div class="accordion-body"><table class="table table-sm"><tbody>${g[c].sort((a,b)=>(a.classNo||999)-(b.classNo||999)).map(x=>`<tr><td>${x.s}</td><td>${x.name}</td><td>${x.classNo||'-'}</td></tr>`).join('')}</tbody></table></div></div></div>`).join(''); }
+    window.loadGroups = window.loadEnrollments; window.processGroupAssignment = async() => { const y=document.getElementById('yearSelector').value, g=document.getElementById('targetGroupName').value, u={}; document.getElementById('groupStudentList').value.split(/[\s,]+/).forEach(s=>{if(s&&studentsMap[s])u[`enrollments/${y}/${s}/mathGroup`]=g;}); await update(ref(db),u); document.getElementById('groupStudentList').value=''; loadGroups(); };
+    function renderGroupAccordion() { const g={}; Object.keys(enrollmentsMap).forEach(s=>{const m=enrollmentsMap[s].mathGroup; if(m){if(!g[m])g[m]=[]; g[m].push({s,n:studentsMap[s]?.name,c:enrollmentsMap[s].homeClass})}}); document.getElementById('groupAccordion').innerHTML = Object.keys(g).sort().map((m,i)=>`<div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#g${i}">${m} (${g[m].length})</button></h2><div id="g${i}" class="accordion-collapse collapse"><div class="accordion-body"><table class="table table-sm"><tbody>${g[m].map(x=>`<tr><td>${x.s}</td><td>${x.n}</td><td>${x.c||'-'}</td></tr>`).join('')}</tbody></table></div></div></div>`).join(''); }
+
+    window.updateGroupDropdownForTest = async() => { const y=document.getElementById('testYear').value, s=await get(ref(db,`enrollments/${y}`)), d=s.val()||{}, g=new Set(); Object.values(d).forEach(x=>{if(x.mathGroup)g.add(x.mathGroup)}); document.getElementById('testGroup').innerHTML = Array.from(g).sort().map(x=>`<option value="${x}">${x}</option>`).join(''); };
+    
+    // Updated: Supports prepopulation for edit mode
+    window.renderQuestionInputs = (forceData = null) => { 
+        const count = document.getElementById('testQCount').value;
+        const tbody = document.getElementById('questionBuilderBody');
+        tbody.innerHTML = ''; 
+        
+        for(let i=1; i<=count; i++) {
+            const data = forceData ? forceData[i-1] : null;
+            const topic = data ? data.topic : '';
+            const sub = data ? data.subTopic : '';
+            const type = data ? data.type : 'Long';
+            const diff = data ? data.difficulty : 'A1';
+            const max = data ? data.maxScore : 10;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${i}</td>
+                <td><input class="form-control q-topic" value="${topic}"></td>
+                <td><input class="form-control q-sub" value="${sub}"></td>
+                <td><select class="form-select q-type" onchange="updateDiff(this)"><option value="Long" ${type==='Long'?'selected':''}>Long</option><option value="MC" ${type==='MC'?'selected':''}>MC</option></select></td>
+                <td><select class="form-select q-diff"></select></td>
+                <td><input type="number" class="form-control q-max" value="${max}"></td>
+            `;
+            tbody.appendChild(tr);
+            
+            // Set diff options and value
+            const diffSel = tr.querySelector('.q-diff');
+            updateDiff(tr.querySelector('.q-type')); // Populates options
+            diffSel.value = diff; // Select correct value
+        }
+    };
+
+    window.updateDiff = (el) => {
+        const sel = el.closest('tr').querySelector('.q-diff');
+        const oldVal = sel.value;
+        sel.innerHTML = el.value === 'Long' 
+            ? '<option value="A1">A1</option><option value="A2">A2</option><option value="B">B</option>'
+            : '<option value="A">A</option><option value="B">B</option>';
+        if(oldVal && Array.from(sel.options).some(o=>o.value===oldVal)) sel.value = oldVal;
+    };
+
+    // FIXED: Properly access bulk setting inputs by ID
+    window.applyBulkSettings = () => { 
+        const start = parseInt(document.getElementById('bulkStart').value);
+        const end = parseInt(document.getElementById('bulkEnd').value);
+        if(isNaN(start) || isNaN(end)) return;
+        
+        const bTopic = document.getElementById('bulkTopic').value;
+        const bSub = document.getElementById('bulkSub').value;
+        const bType = document.getElementById('bulkType').value;
+        const bDiff = document.getElementById('bulkDiff').value;
+        const bScore = document.getElementById('bulkScore').value;
+
+        Array.from(document.getElementById('questionBuilderBody').rows).forEach((r,i) => { 
+            if(i+1 >= start && i+1 <= end) { 
+                if(bTopic) r.querySelector('.q-topic').value = bTopic;
+                if(bSub) r.querySelector('.q-sub').value = bSub;
+                if(bScore) r.querySelector('.q-max').value = bScore;
+                if(bType) {
+                    const tSel = r.querySelector('.q-type');
+                    tSel.value = bType;
+                    updateDiff(tSel);
+                }
+                if(bDiff) {
+                    const dSel = r.querySelector('.q-diff');
+                    // Ensure option exists (e.g., A1 valid for Long but not MC)
+                    if(Array.from(dSel.options).some(o=>o.value===bDiff)) dSel.value = bDiff;
+                }
+            } 
+        }); 
+    };
+    
+    document.getElementById('createTestForm').addEventListener('submit', async(e)=>{ 
+        e.preventDefault(); 
+        const qs=[]; 
+        document.querySelectorAll('#questionBuilderBody tr').forEach((r,i)=>qs.push({id:`q${i+1}`,topic:r.querySelector('.q-topic').value,subTopic:r.querySelector('.q-sub').value,type:r.querySelector('.q-type').value,difficulty:r.querySelector('.q-diff').value,maxScore:Number(r.querySelector('.q-max').value)}));
+        
+        // Use editingTestId if available, else create new
+        const testId = editingTestId ? editingTestId : `test_${Date.now()}`;
+        
+        // Handle multi-select groups: convert selected options to array
+        const selectedGroups = Array.from(document.getElementById('testGroup').selectedOptions).map(opt => opt.value);
+
+        const testData = {
+            name: document.getElementById('testName').value,
+            year: document.getElementById('testYear').value,
+            targetGroups: selectedGroups, // Store as array
+            targetGroup: selectedGroups[0], // Keep for backward compatibility (optional but safe)
+            type: document.getElementById('testType').value,
+            totalQuestions: qs.length,
+            questions: qs
+        };
+
+        try {
+            if (editingTestId) {
+                // Update
+                await update(ref(db, `assessments/${testId}`), testData);
+                showMsg("更新成功", "測驗資料已更新。");
+            } else {
+                // Create
+                await set(ref(db, `assessments/${testId}`), testData);
+                showMsg("建立成功", "新測驗已建立。");
+            }
+            
+            // Reset state
+            cancelEditTest();
+            // Refresh list if on list tab
+            if(document.querySelector('#tab-list-test.active')) renderAssessmentList();
+            
+        } catch (err) {
+            showMsg("錯誤", err.message);
+        }
+    });
+
+    window.renderAssessmentList = () => { 
+        const filterGroup = document.getElementById('viewTestGroupFilter').value; 
+        const tbody = document.getElementById('assessmentListBody'); 
+        const groups = new Set(); 
+        let html = '';
+        
+        Object.entries(assessmentsMap).forEach(([id, t]) => { 
+            // Handle targetGroups (array) or targetGroup (string legacy)
+            const tGroups = Array.isArray(t.targetGroups) ? t.targetGroups : [t.targetGroup];
+            tGroups.forEach(g => groups.add(g));
+            
+            if (!filterGroup || tGroups.includes(filterGroup)) { 
+                const max = t.questions ? t.questions.reduce((a,b)=>a+b.maxScore,0) : 0; 
+                html += `
+                    <tr>
+                        <td>${t.name}</td>
+                        <td>${t.year}</td>
+                        <td>${tGroups.join(', ')}</td>
+                        <td>${t.totalQuestions}</td>
+                        <td>${max}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary me-1" onclick="editAssessment('${id}')"><i class="fas fa-edit"></i> 編輯</button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteAssessment('${id}')"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>`; 
+            } 
+        });
+        tbody.innerHTML = html; 
+        
+        const filterEl = document.getElementById('viewTestGroupFilter'); 
+        if(filterEl.options.length <= 1) { 
+            Array.from(groups).sort().forEach(g => { filterEl.innerHTML += `<option value="${g}">${g}</option>`; }); 
+        }
+
+        // --- NEW: Render Combined Assessments ---
+        const combinedTbody = document.getElementById('combinedAssessmentListBody');
+        let combinedHtml = '';
+        Object.entries(combinedAssessmentsMap).forEach(([cid, c]) => {
+            const p1 = assessmentsMap[c.paper1Id];
+            const p2 = assessmentsMap[c.paper2Id];
+            if (!p1 || !p2) return; // Skip if source tests deleted
+            
+            // Filter by group if needed (simple check if any of P1 or P2 target groups match)
+            // Or usually we list all. For simplicity, we list all here or could filter.
+            
+            combinedHtml += `
+                <tr>
+                    <td><strong class="text-success">${c.name}</strong></td>
+                    <td>${c.year}</td>
+                    <td>${p1.name}</td>
+                    <td>${p2.name}</td>
+                    <td><button class="btn btn-sm btn-outline-danger" onclick="deleteCombinedTest('${cid}')"><i class="fas fa-trash"></i></button></td>
+                </tr>
+            `;
+        });
+        combinedTbody.innerHTML = combinedHtml || '<tr><td colspan="5" class="text-muted text-center">暫無設定</td></tr>';
+    };
+
+    // --- NEW: Combined Test Logic ---
+    window.openCombinedTestModal = () => {
+        const modal = new bootstrap.Modal(document.getElementById('combinedTestModal'));
+        const yearSel = document.getElementById('combinedYear');
+        yearSel.innerHTML = allYears.map(y => `<option value="${y}" ${y===currentSystemYear?'selected':''}>${y}</option>`).join('');
+        updateCombinedPaperSelects();
+        modal.show();
+    };
+
+    window.updateCombinedPaperSelects = () => {
+        const y = document.getElementById('combinedYear').value;
+        const p1Sel = document.getElementById('combinedP1');
+        const p2Sel = document.getElementById('combinedP2');
+        p1Sel.innerHTML = '<option value="">請選擇...</option>';
+        p2Sel.innerHTML = '<option value="">請選擇...</option>';
+
+        Object.entries(assessmentsMap).forEach(([id, t]) => {
+            if (t.year === y) {
+                const opt = `<option value="${id}">${t.name} (Max: ${t.questions.reduce((a,b)=>a+b.maxScore,0)})</option>`;
+                p1Sel.innerHTML += opt;
+                p2Sel.innerHTML += opt;
+            }
+        });
+    };
+
+    window.saveCombinedTest = async () => {
+        const name = document.getElementById('combinedName').value;
+        const year = document.getElementById('combinedYear').value;
+        const p1 = document.getElementById('combinedP1').value;
+        const p2 = document.getElementById('combinedP2').value;
+
+        if (!name || !p1 || !p2) return alert("請填寫所有欄位");
+        if (p1 === p2) return alert("卷一與卷二不能相同");
+
+        const cid = `combined_${Date.now()}`;
+        const data = { name, year, paper1Id: p1, paper2Id: p2 };
+
+        try {
+            await set(ref(db, `combinedAssessments/${cid}`), data);
+            bootstrap.Modal.getInstance(document.getElementById('combinedTestModal')).hide();
+            showMsg("成功", "合併測驗已設定");
+            // No need to reload list, Firebase listener handles it
+        } catch(e) { showMsg("錯誤", e.message); }
+    };
+
+    window.deleteCombinedTest = async (cid) => {
+        if(confirm("確定刪除此合併測驗設定？")) {
+            await remove(ref(db, `combinedAssessments/${cid}`));
+        }
+    };
+
+    // --- NEW: EDIT & DELETE FUNCTIONS ---
+    window.editAssessment = async (testId) => {
+        const data = assessmentsMap[testId];
+        if(!data) return alert("錯誤：找不到測驗資料");
+
+        editingTestId = testId; // Set global flag
+
+        // Populate Form
+        document.getElementById('testName').value = data.name;
+        document.getElementById('testYear').value = data.year;
+        await window.updateGroupDropdownForTest(); // Ensure group options exist for this year
+        
+        // Handle Multi-select population
+        const tGroups = Array.isArray(data.targetGroups) ? data.targetGroups : [data.targetGroup];
+        const groupSelect = document.getElementById('testGroup');
+        Array.from(groupSelect.options).forEach(opt => {
+            opt.selected = tGroups.includes(opt.value);
+        });
+
+        document.getElementById('testType').value = data.type;
+        document.getElementById('testQCount').value = data.totalQuestions;
+
+        // Render Questions with Data
+        window.renderQuestionInputs(data.questions);
+
+        // UI Changes
+        document.getElementById('createTestFormTitle').innerText = `編輯測驗: ${data.name}`;
+        document.getElementById('btnSaveTest').innerText = "更新測驗";
+        document.getElementById('btnSaveTest').classList.replace('btn-primary', 'btn-success');
+        document.getElementById('btnCancelEdit').classList.remove('d-none');
+
+        // Switch Tab
+        const triggerEl = document.querySelector('#btn-create-test-tab');
+        const tab = new bootstrap.Tab(triggerEl);
+        tab.show();
+    };
+
+    window.cancelEditTest = () => {
+        editingTestId = null;
+        document.getElementById('createTestForm').reset();
+        document.getElementById('questionBuilderBody').innerHTML = '';
+        
+        // Reset UI
+        document.getElementById('createTestFormTitle').innerText = "1. 基本資訊";
+        document.getElementById('btnSaveTest').innerText = "儲存測驗";
+        document.getElementById('btnSaveTest').classList.replace('btn-success', 'btn-primary');
+        document.getElementById('btnCancelEdit').classList.add('d-none');
+    };
+
+    window.deleteAssessment = async (testId) => {
+        if(!confirm("確定要刪除此測驗嗎？此操作無法復原。")) return;
+        
+        const deleteScores = confirm("是否同時刪除此測驗的所有學生成績紀錄？\n(建議選擇「確定」以保持資料庫整潔)");
+        
+        try {
+            showLoading(true);
+            await remove(ref(db, `assessments/${testId}`));
+            if(deleteScores) {
+                await remove(ref(db, `scores/${testId}`));
+            }
+            showMsg("刪除成功", "測驗已刪除");
+            renderAssessmentList(); // Refresh list
+        } catch(e) {
+            showMsg("錯誤", e.message);
+        } finally {
+            showLoading(false);
+        }
+    };
+
+    window.updateScoreTestSelect = () => { 
+        const year = document.getElementById('scoreYearSelect').value;
+        const select = document.getElementById('scoreTestSelect');
+        select.innerHTML = '<option value="">請選擇測驗...</option>';
+        
+        if (!year) return; // Wait for year to be populated
+
+        Object.entries(assessmentsMap).forEach(([id, t]) => {
+            if (t.year === year) {
+                 const groups = Array.isArray(t.targetGroups) ? t.targetGroups.join(',') : t.targetGroup;
+                 select.innerHTML += `<option value="${id}">${t.name} (${groups})</option>`;
+            }
+        });
+    };
+    
+    // UPDATED: Load Score Entry with Deductions
+    window.loadScoreEntryTable = async() => { 
+        const tid=document.getElementById('scoreTestSelect').value; if(!tid)return; 
+        const t=assessmentsMap[tid], en=(await get(ref(db,`enrollments/${t.year}`))).val()||{}, sc=(await get(ref(db,`scores/${tid}`))).val()||{}; 
+        
+        // Handle Multi-group: Check if student's mathGroup is in the test's targetGroups array
+        const targetGroups = Array.isArray(t.targetGroups) ? t.targetGroups : [t.targetGroup];
+        
+        const stus=Object.keys(en).filter(k => targetGroups.includes(en[k].mathGroup)).map(k=>({id:k,n:studentsMap[k].name,c:en[k].homeClass||'Z',no:en[k].classNo||999})).sort((a,b)=>a.c.localeCompare(b.c)||a.no-b.no); 
+        
+        const qCols = t.questions.map(q=>`<th><small>${q.id}/${q.maxScore}</small></th>`).join('');
+        
+        let rows = stus.map(s => {
+            const stuScores = sc[s.id] || {};
+            const pp = stuScores.pp !== undefined ? stuScores.pp : '';
+            const u = stuScores.u !== undefined ? stuScores.u : '';
+            const pen = stuScores.pen !== undefined ? stuScores.pen : '';
+            const isAbsent = stuScores.isAbsent || false;
+            
+            // Build question inputs (add disabled attribute if absent)
+            let inputs = t.questions.map(q => { 
+                const val = stuScores[q.id] !== undefined ? stuScores[q.id] : ''; 
+                return `<td><input type="number" class="form-control form-control-sm score-input mx-auto" data-sid="${s.id}" data-qid="${q.id}" data-max="${q.maxScore}" value="${val}" onchange="calcTotal(this)" onpaste="handlePaste(event)" ${isAbsent?'disabled':''}></td>`; 
+            }).join('');
+            
+            // Add Deduction Inputs
+            inputs += `
+                <td><input type="number" class="form-control form-control-sm score-input mx-auto deduction-input" data-sid="${s.id}" data-col="pp" value="${pp}" onchange="calcTotal(this)" onpaste="handlePaste(event)" placeholder="-" ${isAbsent?'disabled':''}></td>
+                <td><input type="number" class="form-control form-control-sm score-input mx-auto deduction-input" data-sid="${s.id}" data-col="u" value="${u}" onchange="calcTotal(this)" onpaste="handlePaste(event)" placeholder="-" ${isAbsent?'disabled':''}></td>
+                <td><input type="number" class="form-control form-control-sm score-input mx-auto deduction-input" data-sid="${s.id}" data-col="pen" value="${pen}" onchange="calcTotal(this)" onpaste="handlePaste(event)" placeholder="-" ${isAbsent?'disabled':''}></td>
+            `;
+
+            return `
+                <tr class="${isAbsent ? 'absent-row' : ''}">
+                    <td class="text-start">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div><small>${s.id} ${s.c}(${s.no==999?'-':s.no})</small><br><strong>${s.n}</strong></div>
+                            <div class="form-check form-switch ms-2" title="標記缺席">
+                                <input class="form-check-input absent-toggle" type="checkbox" data-sid="${s.id}" onchange="toggleAbsent(this)" ${isAbsent?'checked':''}>
+                            </div>
+                        </div>
+                    </td>
+                    ${inputs}
+                    <td><span class="fw-bold total-score" id="tot-${s.id}">${isAbsent ? 'Abs' : (stuScores.total||0)}</span></td>
+                </tr>`;
+        }).join('');
+
+        document.getElementById('scoreEntryArea').innerHTML=`
+            <table id="scoreTable" class="table table-bordered table-striped text-center align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th rowspan="2">學生 / 缺席</th><th colspan="${t.questions.length}">題目得分</th><th colspan="3" class="bg-danger border-danger">扣分項</th><th rowspan="2">總分</th></tr>
+                    <tr>${qCols}<th class="bg-danger border-danger small">PP</th><th class="bg-danger border-danger small">U</th><th class="bg-danger border-danger small">PEN</th></tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>`; 
+    };
+    
+    // NEW: Toggle Absent State
+    window.toggleAbsent = (cb) => {
+        const row = cb.closest('tr');
+        const isAbsent = cb.checked;
+        const sid = cb.dataset.sid;
+        
+        // Toggle input disabled state
+        row.querySelectorAll('input[type="number"]').forEach(input => {
+            input.disabled = isAbsent;
+        });
+        
+        // Update visual style
+        if(isAbsent) {
+            row.classList.add('absent-row');
+            document.getElementById(`tot-${sid}`).innerText = 'Abs';
+        } else {
+            row.classList.remove('absent-row');
+            // Trigger recalc to restore total
+            const anyInput = row.querySelector('.score-input');
+            if(anyInput) calcTotal(anyInput);
+        }
+    };
+
+    window.handlePaste = (e) => { 
+        e.preventDefault(); 
+        const r=e.target.closest('tr');
+        // Prevent paste if row is disabled (absent)
+        if(r.classList.contains('absent-row')) return;
+        
+        const cIdx=Array.from(r.children).indexOf(e.target.closest('td')), rIdx=Array.from(r.parentNode.children).indexOf(r); 
+        const rows = (e.clipboardData||window.clipboardData).getData('text').trim().split('\n');
+        
+        const tableRows = document.querySelectorAll('#scoreTable tbody tr');
+        
+        rows.forEach((rowText, i) => {
+            const targetRow = tableRows[rIdx + i];
+            // Skip if row doesn't exist or is marked absent
+            if(!targetRow || targetRow.classList.contains('absent-row')) return;
+            
+            const cells = rowText.split('\t');
+            cells.forEach((val, j) => {
+                const targetCell = targetRow.children[cIdx + j];
+                if(targetCell) {
+                    const inp = targetCell.querySelector('input');
+                    if(inp && !inp.disabled) {
+                        inp.value = val;
+                        calcTotal(inp);
+                    }
+                }
+            });
+        });
+    };
+    
+    window.calcTotal = (el) => { 
+        const row = el.closest('tr');
+        // If absent, do not calc
+        if(row.classList.contains('absent-row')) return;
+        
+        let sum=0; 
+        row.querySelectorAll('.score-input').forEach(i=>sum+=parseFloat(i.value)||0); 
+        document.getElementById(`tot-${el.dataset.sid}`).innerText=sum; 
+    };
+    
+    window.saveScores = async() => { 
+        const tid=document.getElementById('scoreTestSelect').value, u={}; 
+        if(!tid) return;
+        
+        document.querySelectorAll('#scoreTable tbody tr').forEach(r=>{ 
+            const absentToggle = r.querySelector('.absent-toggle');
+            if(!absentToggle) return;
+            const sid = absentToggle.dataset.sid;
+            const isAbsent = absentToggle.checked;
+            
+            const sObj = { isAbsent: isAbsent, total: 0 }; // Always save isAbsent status
+            
+            if (!isAbsent) {
+                r.querySelectorAll('.score-input').forEach(i => {
+                    const val = parseFloat(i.value);
+                    if(!isNaN(val)) {
+                        if(i.dataset.qid) sObj[i.dataset.qid] = val;
+                        if(i.dataset.col) sObj[i.dataset.col] = val; // pp, u, pen
+                        sObj.total += val;
+                    }
+                }); 
+            }
+            u[`scores/${tid}/${sid}`]=sObj;
+        }); 
+        await update(ref(db),u); 
+        alert('已儲存'); 
+    };
+
+    window.updateAnalYearDropdown = () => updateYearSelectors(); window.updateAnalGroupDropdown = async () => { const y = document.getElementById('analGroupYear').value; const snap = await get(ref(db, `enrollments/${y}`)); const data = snap.val() || {}; const groups = new Set(); Object.values(data).forEach(d => { if(d.mathGroup) groups.add(d.mathGroup); }); document.getElementById('analGroupSelect').innerHTML = Array.from(groups).sort().map(g => `<option value="${g}">${g}</option>`).join(''); };
+    let groupChart = null;
+    
+    // Group Analysis with DSE Logic (UPDATED: Handle Absence & Toggle Filter & New Stats & Extended Part & Comparison)
+    window.performGroupAnalysis = async () => {
+        const year = document.getElementById('analGroupYear').value;
+        const group = document.getElementById('analGroupSelect').value;
+        const includeAll = document.getElementById('analIncludeAll').checked; 
+        
+        if (!group) return alert("請選擇組別"); 
+        showLoading(true);
+        
+        // Updated filter logic: Check if test.targetGroups includes the selected group
+        const targetTests = Object.entries(assessmentsMap).filter(([tid, t]) => {
+             const tGroups = Array.isArray(t.targetGroups) ? t.targetGroups : [t.targetGroup];
+             return t.year === year && tGroups.includes(group);
+        }).map(([tid, t]) => ({ id: tid, ...t }));
+        
+        if (targetTests.length === 0) { showLoading(false); return alert("無資料"); }
+        
+        const tableBody = document.getElementById('groupAnalTableBody'); tableBody.innerHTML = ''; 
+        
+        // Overall Analysis Variables
+        const overallStudentStats = {}; // sid -> { totalPct: 0, count: 0, name: ... }
+        const overallTopicStats = {}; // topic -> { got: 0, max: 0 }
+        
+        try {
+            const enSnap = await get(ref(db, `enrollments/${year}`));
+            const enrollments = enSnap.val() || {};
+
+            // --- 0. NEW: PROCESS COMBINED ASSESSMENTS ---
+            const combinedContainer = document.getElementById('groupCombinedStatsContainer');
+            const combinedTbody = document.getElementById('groupCombinedTableBody');
+            combinedTbody.innerHTML = '';
+            let hasCombinedTests = false;
+            
+            // Filter combined tests for this year
+            const yearCombinedTests = Object.entries(combinedAssessmentsMap).filter(([cid, c]) => c.year === year);
+            
+            if (yearCombinedTests.length > 0) {
+                 for (const [cid, c] of yearCombinedTests) {
+                    const p1 = assessmentsMap[c.paper1Id];
+                    const p2 = assessmentsMap[c.paper2Id];
+                    if(!p1 || !p2) continue; // Skip if source missing
+                    
+                    // Check if group participated in P1 or P2 (Assumption: if group is in P1/P2 targets)
+                    const p1Groups = Array.isArray(p1.targetGroups) ? p1.targetGroups : [p1.targetGroup];
+                    const p2Groups = Array.isArray(p2.targetGroups) ? p2.targetGroups : [p2.targetGroup];
+                    const combinedTargetGroups = [...new Set([...p1Groups, ...p2Groups])];
+
+                    if(!includeAll && !combinedTargetGroups.includes(group)) continue; 
+
+                    // Fetch scores
+                    const s1Snap = await get(ref(db, `scores/${c.paper1Id}`)); const s1 = s1Snap.val() || {};
+                    const s2Snap = await get(ref(db, `scores/${c.paper2Id}`)); const s2 = s2Snap.val() || {};
+                    const max1 = p1.questions.reduce((a,b)=>a+b.maxScore,0);
+                    const max2 = p2.questions.reduce((a,b)=>a+b.maxScore,0);
+                    
+                    if (max1 === 0 || max2 === 0) continue;
+
+                    let cScores = [];
+                    let cTopicStats = {}; // Combined topic accumulation
+                    
+                    const enrolledSids = Object.keys(enrollments).filter(sid => {
+                         const sGroup = enrollments[sid].mathGroup;
+                         if (includeAll) {
+                             return combinedTargetGroups.includes(sGroup);
+                         } else {
+                             return sGroup === group;
+                         }
+                    });
+                    
+                    const totalEnrolled = enrolledSids.length;
+
+                    enrolledSids.forEach(sid => {
+                        // Check if student exists in both (or treat missing as 0? Logic: if in db)
+                        // Handle Absence: if absent in EITHER, we treat as absent for combined
+                        if (!s1[sid] || !s2[sid] || s1[sid].isAbsent || s2[sid].isAbsent) return; 
+
+                        const score1 = s1[sid].total || 0;
+                        const score2 = s2[sid].total || 0;
+                        
+                        // Formula: (S1/M1 * 65) + (S2/M2 * 35)
+                        const finalScore = (score1 / max1 * 65) + (score2 / max2 * 35);
+                        
+                        const cls = enrollments[sid].homeClass || 'Unknown';
+                        const clsNo = enrollments[sid].classNo || 999;
+
+                        cScores.push({ sid, name: studentsMap[sid]?.name, class: cls, classNo: clsNo, p1: score1, p2: score2, total: finalScore });
+
+                        // Topic Stats
+                        p1.questions.forEach(q => { const got = s1[sid][q.id] || 0; if(!cTopicStats[q.topic]) cTopicStats[q.topic] = {got:0, max:0}; cTopicStats[q.topic].got += got; cTopicStats[q.topic].max += q.maxScore; });
+                        p2.questions.forEach(q => { const got = s2[sid][q.id] || 0; if(!cTopicStats[q.topic]) cTopicStats[q.topic] = {got:0, max:0}; cTopicStats[q.topic].got += got; cTopicStats[q.topic].max += q.maxScore; });
+                    });
+                    
+                    // NEW: Assign ranks
+                    cScores.sort((a, b) => b.total - a.total);
+                    let currentRank = 1;
+                    for (let i = 0; i < cScores.length; i++) {
+                        if (i > 0 && Math.abs(cScores[i].total - cScores[i-1].total) > 0.01) {
+                            currentRank = i + 1;
+                        }
+                        cScores[i].rank = currentRank;
+                    }
+                    
+                    // Store for sorting
+                    currentCombinedData[cid] = cScores;
+
+                    if (cScores.length > 0) {
+                        hasCombinedTests = true;
+                        
+                        const scoresArr = cScores.map(s => s.total);
+                        // Sort scores for stats calculation
+                        scoresArr.sort((a,b)=>a-b);
+
+                        const count = cScores.length;
+                        const sum = scoresArr.reduce((a,b)=>a+b,0);
+                        const mean = (sum / count).toFixed(1);
+                        const max = scoresArr[count-1].toFixed(1);
+                        const min = scoresArr[0].toFixed(1);
+                        const mid = Math.floor(count / 2); 
+                        const median = (count % 2 !== 0 ? scoresArr[mid] : (scoresArr[mid - 1] + scoresArr[mid]) / 2).toFixed(1);
+                        const sqDiffs = scoresArr.map(v => Math.pow(v - mean, 2)); 
+                        const sd = Math.sqrt(sqDiffs.reduce((a, b) => a + b, 0) / count).toFixed(1); 
+                        
+                        // Pass rate (Using checkPass logic, usually 35 for DSE context in this system)
+                        let isExtended = false;
+                        if (groupsMetaMap && groupsMetaMap[year] && groupsMetaMap[group]) isExtended = groupsMetaMap[year][group].isExtended;
+                        const passCount = scoresArr.filter(s => checkPass(s, isExtended)).length; // Max is 100
+                        const passRate = ((passCount / count) * 100).toFixed(1);
+
+                        // DSE Dist
+                        const dseHtml = DSE_CUTOFFS_CORE.map(lvl => {
+                            const matches = cScores.filter(s => getDSELevel(s.total, isExtended).level === lvl.l);
+                            if (matches.length === 0) return '';
+                            const names = matches.map(m=>m.name).join(', ');
+                            return `<div class="mb-1"><span class="badge ${lvl.c} me-2" style="width:70px">${lvl.l}</span><span class="fw-bold">${matches.length}人</span> <span class="small text-muted text-truncate d-inline-block" style="max-width:200px; vertical-align:bottom">(${names})</span></div>`;
+                        }).join('');
+
+                        // Topic Html
+                        let topicHtml = '';
+                        Object.entries(cTopicStats).forEach(([t, d]) => {
+                             const pct = d.max > 0 ? ((d.got/d.max)*100).toFixed(1) : 0;
+                             topicHtml += `<div class="mb-2"><div class="d-flex justify-content-between small mb-1"><span>${t}</span><span>${pct}%</span></div><div class="progress stats-progress"><div class="progress-bar bg-success" role="progressbar" style="width: ${pct}%"></div></div></div>`;
+                        });
+
+                        const collapseId = `comb_detail_${cid}`;
+
+                        combinedTbody.innerHTML += `
+                            <tr data-bs-toggle="collapse" data-bs-target="#${collapseId}" class="accordion-toggle" style="cursor:pointer" onclick="renderCombinedStudentList('${cid}', 'class')">
+                                <td>${c.name} <i class="fas fa-caret-down ms-1"></i></td>
+                                <td>${count} / ${totalEnrolled}</td>
+                                <td>100</td><td>${mean}</td><td>${median}</td><td>${max}/${min}</td><td>${sd}</td><td>${passRate}%</td>
+                                <td><button class="btn btn-sm btn-outline-success">查看詳情</button></td>
+                            </tr>
+                            <tr>
+                                <td colspan="9" class="hiddenRow">
+                                    <div class="accordian-body collapse" id="${collapseId}">
+                                        <div class="dse-distribution-container">
+                                            <div class="row">
+                                                <div class="col-md-4 border-end">
+                                                    <h6 class="text-primary border-bottom pb-2">DSE 等級分佈</h6>
+                                                    ${dseHtml || '<span class="text-muted">無數據</span>'}
+                                                </div>
+                                                <div class="col-md-3 border-end">
+                                                    <h6 class="text-success border-bottom pb-2">課題表現 (累積得分率)</h6>
+                                                    ${topicHtml || '<span class="text-muted">無數據</span>'}
+                                                </div>
+                                                <div class="col-md-5">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-2">
+                                                        <h6 class="text-secondary mb-0">學生成績列表</h6>
+                                                        <div>
+                                                            <button class="btn btn-xs btn-outline-secondary me-1" onclick="renderCombinedStudentList('${cid}', 'class')">按學號</button>
+                                                            <button class="btn btn-xs btn-outline-primary" onclick="renderCombinedStudentList('${cid}', 'rank')">按排名</button>
+                                                        </div>
+                                                    </div>
+                                                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                                        <table class="table table-sm table-striped text-center small mb-0 sticky-top">
+                                                            <thead class="table-light"><tr><th>班別</th><th>學號</th><th class="text-start">姓名</th><th>卷一</th><th>卷二</th><th>總分</th><th>排名</th></tr></thead>
+                                                            <tbody id="comb_stu_list_${cid}"></tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                 }
+            }
+            
+            if (hasCombinedTests) {
+                combinedContainer.classList.remove('d-none');
+            } else {
+                combinedContainer.classList.add('d-none');
+            }
+
+
+            // --- 1. EXISTING INDIVIDUAL TEST LOOP ---
+            for (const test of targetTests) {
+                const scoreSnap = await get(ref(db, `scores/${test.id}`)); const scoresObj = scoreSnap.val() || {}; 
+                const maxScore = test.questions.reduce((a,b) => a + b.maxScore, 0);
+                
+                const validScores = [];
+                const validScoreData = []; 
+
+                // NEW: Group Comparison Data
+                const participatingGroups = Array.isArray(test.targetGroups) ? test.targetGroups : [test.targetGroup];
+                const groupCompStats = {};
+                participatingGroups.forEach(g => groupCompStats[g] = { topics: {}, diffs: {}, count: 0 });
+
+                Object.entries(scoresObj).forEach(([sid, s]) => {
+                    const studentGroup = enrollments[sid] ? enrollments[sid].mathGroup : null;
+                    // For filtering inside the test loop (existing logic)
+                    if (!includeAll && studentGroup !== group) return;
+
+                    if (!s.isAbsent && s.total !== undefined) {
+                        validScores.push({ sid, total: s.total });
+                        validScoreData.push({ sid, scores: s, group: studentGroup }); 
+                        
+                        // Accumulate for Group Comparison (only if group is known and part of target)
+                        if (studentGroup && groupCompStats[studentGroup]) {
+                            groupCompStats[studentGroup].count++;
+                        }
+                        
+                        // --- ACCUMULATE FOR OVERALL ANALYSIS (Only if not includeAll mode, targeting specific group) ---
+                        if (!includeAll) {
+                            // Update Student Overall Stats
+                            if (!overallStudentStats[sid]) overallStudentStats[sid] = { totalPct: 0, count: 0, name: studentsMap[sid]?.name || sid };
+                            const testPct = maxScore > 0 ? (s.total / maxScore) * 100 : 0;
+                            overallStudentStats[sid].totalPct += testPct;
+                            overallStudentStats[sid].count++;
+
+                            // Update Topic Overall Stats
+                            test.questions.forEach(q => {
+                                const qScore = s[q.id] || 0;
+                                if (!overallTopicStats[q.topic]) overallTopicStats[q.topic] = { got: 0, max: 0 };
+                                overallTopicStats[q.topic].got += qScore;
+                                overallTopicStats[q.topic].max += q.maxScore;
+                            });
+                        }
+                    }
+                });
+                
+                const scoresArr = validScores.map(s => s.total);
+                const countPresent = scoresArr.length;
+                const countTotal = Object.keys(scoresObj).filter(sid => {
+                     const studentGroup = enrollments[sid] ? enrollments[sid].mathGroup : null;
+                     return includeAll || studentGroup === group;
+                }).length;
+                
+                // 1. Get Group Metadata to check if Extended Part
+                let isExtended = false;
+                if (groupsMetaMap && groupsMetaMap[year] && groupsMetaMap[year][group]) {
+                    isExtended = groupsMetaMap[year][group].isExtended;
+                }
+
+                const currentCutoffs = isExtended ? DSE_CUTOFFS_EXT : DSE_CUTOFFS_CORE;
+                const dseDist = {}; currentCutoffs.forEach(c => dseDist[c.l] = []);
+                
+                let mean=0, median=0, max=0, min=0, sd=0, passRate=0, meanPct=0;
+                
+                if (countPresent > 0 && maxScore > 0) {
+                    const sum = scoresArr.reduce((a, b) => a + b, 0); 
+                    mean = parseFloat((sum / countPresent).toFixed(1)); 
+                    meanPct = parseFloat(((mean / maxScore) * 100).toFixed(1));
+                    
+                    scoresArr.sort((a, b) => a - b); 
+                    const mid = Math.floor(countPresent / 2); 
+                    median = countPresent % 2 !== 0 ? scoresArr[mid] : (scoresArr[mid - 1] + scoresArr[mid]) / 2; 
+                    max = scoresArr[countPresent - 1]; 
+                    min = scoresArr[0];
+                    
+                    const sqDiffs = scoresArr.map(v => Math.pow(v - mean, 2)); 
+                    sd = parseFloat(Math.sqrt(sqDiffs.reduce((a, b) => a + b, 0) / countPresent).toFixed(1)); 
+                    passRate = parseFloat(((scoresArr.filter(s => checkPass((s/maxScore)*100, isExtended)).length / countPresent) * 100).toFixed(1));
+                    
+                    validScores.forEach(item => {
+                        const pct = (item.total / maxScore) * 100;
+                        const dse = getDSELevel(pct, isExtended);
+                        const name = studentsMap[item.sid] ? studentsMap[item.sid].name : item.sid;
+                        if(dseDist[dse.level]) dseDist[dse.level].push({sid: item.sid, name});
+                    });
+                }
+                
+                const collapseId = `dse_dist_${test.id}`;
+                let distHtml = '<div class="row g-2">';
+                currentCutoffs.forEach(cutoff => {
+                    const lvl = cutoff.l; const studentsData = dseDist[lvl]; const count = studentsData.length;
+                    if(count > 0) {
+                        const percentage = countPresent > 0 ? ((count / countPresent) * 100).toFixed(1) : 0; 
+                        const badgeClass = cutoff.c;
+                        const studentLinks = studentsData.map(s => `<a href="#" onclick="goToStudentAnalysis('${s.sid}'); return false;" class="text-secondary text-decoration-underline-hover student-link">${s.name}</a>`).join(', ');
+                        distHtml += `<div class="col-md-12 mb-2"><div class="border rounded p-2 d-flex align-items-center"><span class="badge ${badgeClass} me-2" style="min-width:80px">${lvl}</span><span class="fw-bold me-2" style="min-width:100px">${count}人 (${percentage}%)</span><div class="small text-muted flex-grow-1 text-wrap">${studentLinks}</div></div></div>`;
+                    }
+                });
+                distHtml += '</div>';
+
+                let topicHtml = '';
+                let diffHtml = '';
+                let questionHtml = '<table class="table table-sm table-bordered table-hover text-center small mb-0"><thead class="table-light"><tr><th>題號</th><th>課題</th><th>滿分</th><th>平均得分</th><th>得分率</th><th>答對率 (滿分人數)</th></tr></thead><tbody>';
+
+                const topicStats = {}; const diffStats = {};
+                if (countPresent > 0) {
+                    test.questions.forEach(q => {
+                        if(!topicStats[q.topic]) topicStats[q.topic] = {got:0, max:0};
+                        const dKey = q.difficulty || 'Unknown';
+                        if(!diffStats[dKey]) diffStats[dKey] = {got:0, max:0};
+                        
+                        let qTotalGot = 0;
+                        let qFullCount = 0;
+
+                        validScoreData.forEach(studentData => {
+                            const s = studentData.scores; 
+                            const score = s[q.id] || 0;
+                            
+                            // Overall Stats
+                            topicStats[q.topic].got += score; topicStats[q.topic].max += q.maxScore;
+                            diffStats[dKey].got += score; diffStats[dKey].max += q.maxScore;
+
+                            // Group Comparison Stats
+                            const sg = studentData.group;
+                            if (sg && groupCompStats[sg]) {
+                                if(!groupCompStats[sg].topics[q.topic]) groupCompStats[sg].topics[q.topic] = {got:0, max:0};
+                                groupCompStats[sg].topics[q.topic].got += score;
+                                groupCompStats[sg].topics[q.topic].max += q.maxScore;
+
+                                if(!groupCompStats[sg].diffs[dKey]) groupCompStats[sg].diffs[dKey] = {got:0, max:0};
+                                groupCompStats[sg].diffs[dKey].got += score;
+                                groupCompStats[sg].diffs[dKey].max += q.maxScore;
+                            }
+                            
+                            qTotalGot += score;
+                            if (score === q.maxScore) qFullCount++;
+                        });
+                        
+                        const avgScore = countPresent > 0 ? (qTotalGot / countPresent).toFixed(2) : 0;
+                        const scorePct = (countPresent > 0 && q.maxScore > 0) ? ((qTotalGot / (q.maxScore * countPresent)) * 100).toFixed(1) : 0;
+                        const correctPct = countPresent > 0 ? ((qFullCount / countPresent) * 100).toFixed(1) : 0;
+                        const scoreClass = scorePct < 40 ? 'text-danger' : (scorePct > 80 ? 'text-success' : '');
+                        const topicStr = q.subTopic ? `${q.topic}_${q.subTopic}` : q.topic;
+
+                        questionHtml += `<tr>
+                            <td>${q.id}</td>
+                            <td class="text-start">${topicStr}</td>
+                            <td>${q.maxScore}</td>
+                            <td>${avgScore}</td>
+                            <td class="${scoreClass}">${scorePct}%</td>
+                            <td>${correctPct}% <span class="text-muted">(${qFullCount})</span></td>
+                        </tr>`;
+                    });
+                }
+                questionHtml += '</tbody></table>';
+
+                const generateProgressBar = (label, got, max) => {
+                    const pct = max > 0 ? ((got/max)*100).toFixed(1) : 0;
+                    return `<div class="mb-2"><div class="d-flex justify-content-between small mb-1"><span>${label}</span><span>${pct}%</span></div><div class="progress stats-progress"><div class="progress-bar bg-info" role="progressbar" style="width: ${pct}%"></div></div></div>`;
+                };
+                Object.entries(topicStats).forEach(([t, d]) => topicHtml += generateProgressBar(t, d.got, d.max));
+                if (!topicHtml) topicHtml = '<small class="text-muted">無數據</small>';
+                Object.keys(diffStats).sort().forEach(d => diffHtml += generateProgressBar(d, diffStats[d].got, diffStats[d].max));
+                if (!diffHtml) diffHtml = '<small class="text-muted">無數據</small>';
+
+                // --- NEW: Generate Comparison HTML ---
+                let compHtml = '';
+                if (includeAll && participatingGroups.length > 1) {
+                    const getBgClass = (pct) => {
+                        if(pct >= 75) return 'bg-success text-white';
+                        if(pct >= 50) return 'bg-warning text-dark';
+                        return 'bg-danger text-white';
+                    };
+
+                    // 1. Basic Stats Comparison (NEW)
+                    let basicStatsHtml = '';
+                    let basicRows = '';
+                    const statsMeta = [
+                        { key: 'count', label: '應考/總人數' },
+                        { key: 'mean', label: '平均分' },
+                        { key: 'median', label: '中位數' },
+                        { key: 'range', label: '最高/最低' },
+                        { key: 'sd', label: '標準差 (SD)' },
+                        { key: 'pass', label: '合格率' }
+                    ];
+                    
+                    // Pre-calculate stats per group
+                    const groupBasicStats = {};
+                    participatingGroups.forEach(g => {
+                        const gScores = validScoreData.filter(d => d.group === g).map(d => d.scores.total).sort((a,b)=>a-b);
+                        const gCount = gScores.length;
+                        // Get total enrolled for this group
+                        const gTotal = Object.values(enrollments).filter(e => e.mathGroup === g).length;
+                        
+                        if(gCount > 0) {
+                            const sum = gScores.reduce((a,b)=>a+b,0);
+                            const mean = (sum/gCount).toFixed(1);
+                            const min = gScores[0];
+                            const max = gScores[gCount-1];
+                            const mid = Math.floor(gCount/2);
+                            const median = (gCount % 2 !== 0 ? gScores[mid] : (gScores[mid-1]+gScores[mid])/2).toFixed(1);
+                            const sqDiffs = gScores.map(v => Math.pow(v - mean, 2));
+                            const sd = Math.sqrt(sqDiffs.reduce((a,b)=>a+b, 0)/gCount).toFixed(1);
+                            
+                            let gIsExt = false;
+                            if (groupsMetaMap && groupsMetaMap[year] && groupsMetaMap[year][g]) gIsExt = groupsMetaMap[year][g].isExtended;
+                            const passCount = gScores.filter(s => checkPass((s/maxScore)*100, gIsExt)).length;
+                            const passRate = ((passCount/gCount)*100).toFixed(1) + '%';
+
+                            groupBasicStats[g] = {
+                                count: `${gCount} / ${gTotal}`,
+                                mean: mean,
+                                median: median,
+                                range: `${max} / ${min}`,
+                                sd: sd,
+                                pass: passRate
+                            };
+                        } else {
+                            groupBasicStats[g] = { count: `0 / ${gTotal}`, mean:'-', median:'-', range:'-', sd:'-', pass:'-' };
+                        }
+                    });
+
+                    statsMeta.forEach(m => {
+                        let cells = '';
+                        participatingGroups.forEach(g => {
+                            cells += `<td>${groupBasicStats[g][m.key]}</td>`;
+                        });
+                        basicRows += `<tr><td class="text-start fw-bold bg-light">${m.label}</td>${cells}</tr>`;
+                    });
+
+                    basicStatsHtml = `
+                        <div class="col-12 mb-3">
+                            <h6 class="text-secondary small fw-bold mb-3"><i class="fas fa-chart-bar me-1"></i>基本數據比較 (Basic Statistics Comparison)</h6>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm text-center small mb-0">
+                                    <thead class="table-light"><tr><th>項目</th>${participatingGroups.map(g=>`<th>${g}</th>`).join('')}</tr></thead>
+                                    <tbody>${basicRows}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+
+                    // Topic Table
+                    let topicCompRows = '';
+                    Object.keys(topicStats).forEach(topic => {
+                        let cells = '';
+                        participatingGroups.forEach(g => {
+                            const data = groupCompStats[g].topics[topic];
+                            const pct = (data && data.max > 0) ? ((data.got/data.max)*100).toFixed(1) : '-';
+                            const bg = (data && data.max > 0) ? getBgClass(pct) : '';
+                            cells += `<td class="${bg}">${pct}%</td>`;
+                        });
+                        topicCompRows += `<tr><td class="text-start fw-bold">${topic}</td>${cells}</tr>`;
+                    });
+
+                    // Diff Table
+                    let diffCompRows = '';
+                    Object.keys(diffStats).sort().forEach(diff => {
+                        let cells = '';
+                        participatingGroups.forEach(g => {
+                            const data = groupCompStats[g].diffs[diff];
+                            const pct = (data && data.max > 0) ? ((data.got/data.max)*100).toFixed(1) : '-';
+                            const bg = (data && data.max > 0) ? getBgClass(pct) : '';
+                            cells += `<td class="${bg}">${pct}%</td>`;
+                        });
+                        diffCompRows += `<tr><td class="text-start fw-bold">${diff}</td>${cells}</tr>`;
+                    });
+
+                    compHtml = `
+                    <div class="row mt-4 pt-3 border-top">
+                        ${basicStatsHtml}
+                        <div class="col-md-6 border-end">
+                            <h6 class="text-secondary small fw-bold mb-3"><i class="fas fa-layer-group me-1"></i>課題表現比較 (Topic Comparison)</h6>
+                            <table class="table table-bordered table-sm text-center small mb-0">
+                                <thead class="table-light"><tr><th>課題</th>${participatingGroups.map(g=>`<th>${g}</th>`).join('')}</tr></thead>
+                                <tbody>${topicCompRows}</tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-secondary small fw-bold mb-3"><i class="fas fa-tachometer-alt me-1"></i>難度表現比較 (Difficulty Comparison)</h6>
+                            <table class="table table-bordered table-sm text-center small mb-0">
+                                <thead class="table-light"><tr><th>難度</th>${participatingGroups.map(g=>`<th>${g}</th>`).join('')}</tr></thead>
+                                <tbody>${diffCompRows}</tbody>
+                            </table>
+                        </div>
+                    </div>`;
+                }
+
+                tableBody.innerHTML += `
+                    <tr data-bs-toggle="collapse" data-bs-target="#${collapseId}" class="accordion-toggle" style="cursor:pointer">
+                        <td>${test.name} <i class="fas fa-caret-down ms-1"></i></td>
+                        <td>${countPresent} / ${countTotal}</td>
+                        <td>${maxScore}</td><td class="fw-bold">${mean} (${meanPct}%)</td><td>${median}</td><td>${max}/${min}</td><td>${sd}</td><td>${passRate}%</td>
+                        <td><button class="btn btn-sm btn-outline-info">查看分佈</button></td>
+                    </tr>
+                    <tr>
+                        <td colspan="12" class="hiddenRow">
+                            <div class="accordian-body collapse" id="${collapseId}">
+                                <div class="dse-distribution-container">
+                                    <div class="row">
+                                        <div class="col-md-4 border-end">
+                                            <h6 class="text-primary border-bottom pb-2">DSE 等級分佈 (${isExtended ? '延伸' : '核心'})</h6>
+                                            ${distHtml}
+                                        </div>
+                                        <div class="col-md-4 border-end">
+                                            <h6 class="text-success border-bottom pb-2">課題表現 (得分率)</h6>
+                                            ${topicHtml}
+                                        </div>
+                                        <div class="col-md-4">
+                                            <h6 class="text-warning border-bottom pb-2">難度表現 (得分率)</h6>
+                                            ${diffHtml}
+                                        </div>
+                                        ${compHtml}
+                                        <div class="col-12 mt-3 pt-3 border-top">
+                                            <h6 class="text-secondary border-bottom pb-2">題目詳細分析 (Question Analysis)</h6>
+                                            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                                ${questionHtml}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
+            }
+            
+            // --- 2. RENDER OVERALL STATS (TIERS) ---
+            const overallContainer = document.getElementById('groupOverallStatsContainer');
+            if (!includeAll && Object.keys(overallStudentStats).length > 0) {
+                // 1. Process Overall Topics
+                let overallTopicHtml = '';
+                Object.entries(overallTopicStats).forEach(([t, d]) => {
+                     const pct = d.max > 0 ? ((d.got/d.max)*100).toFixed(1) : 0;
+                     overallTopicHtml += `<div class="mb-2"><div class="d-flex justify-content-between small mb-1"><span>${t}</span><span>${pct}%</span></div><div class="progress stats-progress"><div class="progress-bar bg-success" role="progressbar" style="width: ${pct}%"></div></div></div>`;
+                });
+
+                // 2. Process Student Abilities
+                const tiers = {
+                    1: { label: '數學能力優秀 (>=85%)', class: 'bg-primary', students: [] },
+                    2: { label: '數學能力良好 (70-85%)', class: 'bg-success', students: [] },
+                    3: { label: '數學能力一般 (50-70%)', class: 'bg-info', students: [] },
+                    4: { label: '數學能力稍弱 (30-50%)', class: 'bg-warning text-dark', students: [] },
+                    5: { label: '數學能力欠佳 (<30%)', class: 'bg-danger', students: [] }
+                };
+
+                Object.values(overallStudentStats).forEach(s => {
+                    const avgPct = s.count > 0 ? (s.totalPct / s.count) : 0;
+                    let tier = 5;
+                    if (avgPct >= 85) tier = 1;
+                    else if (avgPct >= 70) tier = 2;
+                    else if (avgPct >= 50) tier = 3;
+                    else if (avgPct >= 30) tier = 4;
+                    
+                    tiers[tier].students.push(`${s.name} (${avgPct.toFixed(1)}%)`);
+                });
+
+                let tierHtml = '';
+                for(let i=1; i<=5; i++) {
+                    const t = tiers[i];
+                    if (t.students.length > 0) {
+                        tierHtml += `<div class="mb-3"><span class="badge ${t.class} mb-1" style="font-size:0.9rem">${t.label} - ${t.students.length}人</span><div class="p-2 border rounded bg-white small text-muted">${t.students.join(', ')}</div></div>`;
+                    }
+                }
+                if (!tierHtml) tierHtml = '<div class="text-muted">無數據</div>';
+
+                overallContainer.innerHTML = `
+                    <div class="card border-info shadow-sm">
+                        <div class="card-header bg-info text-white fw-bold"><i class="fas fa-chart-pie me-2"></i>組別整體表現分析 (Overall Performance)</div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-5 border-end">
+                                    <h6 class="text-success border-bottom pb-2">整體課題表現 (累積得分率)</h6>
+                                    ${overallTopicHtml || '<div class="text-muted">無數據</div>'}
+                                </div>
+                                <div class="col-md-7">
+                                    <h6 class="text-primary border-bottom pb-2">學生能力分層 (平均測驗表現)</h6>
+                                    ${tierHtml}
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                overallContainer.classList.remove('d-none');
+            } else {
+                overallContainer.classList.add('d-none');
+            }
+
+            document.getElementById('groupAnalResult').classList.remove('d-none'); 
+        } catch (e) { console.error(e); showMsg("錯誤", "分析過程發生錯誤"); } finally { showLoading(false); }
+    };
+    
+    // NEW Helper function for sorting combined table
+    window.renderCombinedStudentList = (cid, sortMode) => {
+        const data = currentCombinedData[cid];
+        if(!data) return;
+        
+        // Sorting Logic
+        if(sortMode === 'rank') {
+            data.sort((a,b) => b.total - a.total);
+        } else {
+            // Default: Class then No
+            data.sort((a,b) => {
+                const cA = a.class || 'Z'; const cB = b.class || 'Z';
+                if(cA !== cB) return cA.localeCompare(cB);
+                return (a.classNo||999) - (b.classNo||999);
+            });
+        }
+        
+        const tbody = document.getElementById(`comb_stu_list_${cid}`);
+        tbody.innerHTML = data.map(s => `
+            <tr>
+                <td>${s.class}</td>
+                <td>${s.classNo}</td>
+                <td class="text-start">${s.name}</td>
+                <td>${s.p1}</td>
+                <td>${s.p2}</td>
+                <td class="fw-bold text-primary">${s.total.toFixed(1)}</td>
+                <td>${s.rank}</td>
+            </tr>
+        `).join('');
+    };
+
+    // Shared Student Analysis Logic (UPDATED: Handle Absence)
+    async function generateStudentReport(sid, containers, targetYear = null) {
+        if (!sid || !studentsMap[sid]) return alert("找不到學生"); showLoading(true);
+        const studentScores = [], topicStats = {}, typeStats = { 'MC': {got:0, max:0}, 'Long': {got:0, max:0} };
+        // Separate stats for MC and Long difficulties
+        const mcDiffStats = { 'A': {got:0, max:0}, 'B': {got:0, max:0} };
+        const longDiffStats = { 'A1': {got:0, max:0}, 'A2': {got:0, max:0}, 'B': {got:0, max:0} };
+
+        const assessIds = Object.keys(assessmentsMap);
+        if (assessIds.length === 0) { showLoading(false); return alert("無測驗資料"); }
+        
+        let validTestCount = 0; // Count tests where student was present
+        
+        for (const tid of assessIds) {
+            const t = assessmentsMap[tid];
+            // Filter by year if provided
+            if (targetYear && t.year !== targetYear) continue;
+
+            try {
+                let isExtended = false;
+                if (groupsMetaMap && groupsMetaMap[t.year]) {
+                    // Try fetch specific enrollment if student view
+                    let g = null;
+                    try {
+                        // Attempt to read specific enrollment first (might fail for student view depending on rules)
+                        const enSnap = await get(ref(db, `enrollments/${t.year}/${sid}`));
+                        if (enSnap.exists()) g = enSnap.val().mathGroup;
+                    } catch(e) {
+                         // Fallback: iterate loaded enrollmentsMap if available (Teacher view usually has this)
+                         // For student view, we might not have enrollmentsMap populated for all years.
+                         // But usually generateStudentReport is called after some data loading.
+                    }
+                    
+                    if (g && groupsMetaMap[t.year][g]) isExtended = groupsMetaMap[t.year][g].isExtended;
+                }
+
+                const scoreSnap = await get(ref(db, `scores/${tid}/${sid}`)); const myScore = scoreSnap.val();
+                if (myScore) {
+                    const maxTotal = t.questions.reduce((a,b)=>a+b.maxScore, 0); 
+                    
+                    // Handle Absence
+                    if (myScore.isAbsent) {
+                         studentScores.push({ name: t.name, score: 'ABS', max: maxTotal, pct: '-', pass: false, dse: {level: 'ABS', class: 'badge-dse-ABS'}, isAbsent: true });
+                         continue; // Skip stats aggregation
+                    }
+
+                    const pct = maxTotal > 0 ? ((myScore.total / maxTotal) * 100).toFixed(1) : 0;
+                    const dse = getDSELevel(parseFloat(pct), isExtended);
+                    
+                    studentScores.push({ name: t.name, score: myScore.total, max: maxTotal, pct: pct, pass: checkPass(parseFloat(pct), isExtended), dse: dse, isAbsent: false });
+                    validTestCount++;
+                    
+                    t.questions.forEach(q => {
+                        const earned = myScore[q.id] || 0;
+                        if (!topicStats[q.topic]) topicStats[q.topic] = { got: 0, max: 0 }; topicStats[q.topic].got += earned; topicStats[q.topic].max += q.maxScore;
+                        const tKey = q.type === 'MC' ? 'MC' : 'Long'; if(typeStats[tKey]) { typeStats[tKey].got += earned; typeStats[tKey].max += q.maxScore; }
+                        const dKey = q.difficulty;
+                        if (q.type === 'MC') { if (!mcDiffStats[dKey]) mcDiffStats[dKey] = {got:0, max:0}; mcDiffStats[dKey].got += earned; mcDiffStats[dKey].max += q.maxScore; } else { if (!longDiffStats[dKey]) longDiffStats[dKey] = {got:0, max:0}; longDiffStats[dKey].got += earned; longDiffStats[dKey].max += q.maxScore; }
+                    });
+                }
+            } catch (err) {}
+        }
+        if(studentScores.length === 0) { showLoading(false); return alert("無測驗記錄 (請確認學年)"); }
+
+        document.getElementById(containers.result).classList.remove('d-none');
+        document.getElementById(containers.name).innerText = `${studentsMap[sid].name} (${sid})`;
+        
+        document.getElementById(containers.info).innerHTML = `已參加 ${validTestCount} 次測驗 (缺席 ${studentScores.length - validTestCount} 次)`;
+
+        let strongTopics=[], weakTopics=[]; Object.entries(topicStats).forEach(([t, d]) => { if(d.max>0){ let p=(d.got/d.max)*100; if(p>=75) strongTopics.push(`<span class="badge bg-success badge-topic">${t} (${p.toFixed(0)}%)</span>`); if(p<50) weakTopics.push(`<span class="badge bg-danger badge-topic">${t} (${p.toFixed(0)}%)</span>`); } });
+        let typeMsg = ""; let mcPct = typeStats.MC.max ? (typeStats.MC.got/typeStats.MC.max)*100 : 0; let longPct = typeStats.Long.max ? (typeStats.Long.got/typeStats.Long.max)*100 : 0;
+        if(typeStats.MC.max>0 && typeStats.Long.max>0) { if(mcPct>longPct+15) typeMsg="MC 表現優於長題目"; else if(longPct>mcPct+15) typeMsg="長題目表現優於 MC"; else typeMsg="題型表現平均"; } else typeMsg="數據不足";
+        let totalAMax = (mcDiffStats.A?.max||0) + (longDiffStats.A1?.max||0) + (longDiffStats.A2?.max||0); let totalAGot = (mcDiffStats.A?.got||0) + (longDiffStats.A1?.got||0) + (longDiffStats.A2?.got||0); let totalAPct = totalAMax>0 ? (totalAGot/totalAMax)*100 : 0;
+        let totalBMax = (mcDiffStats.B?.max||0) + (longDiffStats.B?.max||0); let totalBGot = (mcDiffStats.B?.got||0) + (longDiffStats.B?.got||0); let totalBPct = totalBMax>0 ? (totalBGot/totalBMax)*100 : 0;
+        let diffMsg = (totalAMax>0&&totalBMax>0) ? (totalAPct>totalBPct+20?"基礎題目良好，進階需加強":totalBPct>50?"具備進階能力":"表現一致") : "數據不足";
+        
+        document.getElementById(containers.report).innerHTML = `<ul class="mb-0 list-unstyled"><li class="mb-2"><strong><i class="fas fa-star text-warning"></i> 課題表現：</strong><br>${strongTopics.length?'優異：'+strongTopics.join(' '):'無顯著優異'}<br>${weakTopics.length?'需加強：'+weakTopics.join(' '):'無顯著落後'}</li><li class="mb-2"><strong><i class="fas fa-check-circle text-success"></i> 題型：</strong> ${typeMsg}</li><li><strong><i class="fas fa-chart-bar text-info"></i> 難度：</strong> ${diffMsg}</li></ul>`;
+
+        // Update Score Table (Handle Absent display)
+        document.getElementById(containers.scoreTable).innerHTML = studentScores.map(s=>{
+            if (s.isAbsent) {
+                return `<tr class="table-secondary"><td>${s.name}</td><td>缺席</td><td>-</td><td><span class="badge badge-dse-ABS">ABS</span></td><td>-</td></tr>`;
+            }
+            return `<tr><td>${s.name}</td><td>${s.score}/${s.max}</td><td>${s.pct}%</td><td><span class="badge ${s.dse.class}">${s.dse.level}</span></td><td><span class="badge bg-${s.pass?'success':'danger'}">${s.pass?'合格':'不合格'}</span></td></tr>`;
+        }).join('');
+        
+        document.getElementById(containers.topicTable).innerHTML = Object.entries(topicStats).map(([t,d])=>d.max>0?`<tr><td>${t}</td><td>${d.got}/${d.max}</td><td>${((d.got/d.max)*100).toFixed(1)}%</td></tr>`:'').join('');
+
+        const destroy = (id) => { const c = Chart.getChart(id); if(c) c.destroy(); return document.getElementById(id); };
+        
+        // Filter out absent tests for trend chart
+        const validTrendScores = studentScores.filter(s => !s.isAbsent);
+        new Chart(destroy(containers.trendChart), { type: 'line', data: { labels: validTrendScores.map(s=>s.name), datasets: [{ label: '得分率 (%)', data: validTrendScores.map(s=>s.pct), borderColor: '#20c997', tension: 0.1, fill: true }] }, options: { scales: { y: { min: 0, max: 100 } }, maintainAspectRatio: false } });
+        new Chart(destroy(containers.typeBar), { type: 'bar', data: { labels: ['MC題', '長題目'], datasets: [{ label: '得分率 (%)', data: [mcPct.toFixed(1), longPct.toFixed(1)], backgroundColor: ['#ffcd56', '#4bc0c0'] }] }, options: { scales: { y: { min: 0, max: 100 } }, maintainAspectRatio: false } });
+        
+        const mcLabels = Object.keys(mcDiffStats).sort();
+        new Chart(destroy(containers.mcDiffChart), { type: 'bar', data: { labels: mcLabels, datasets: [{ label: '得分率 (%)', data: mcLabels.map(k => mcDiffStats[k].max===0 ? 0 : ((mcDiffStats[k].got/mcDiffStats[k].max)*100).toFixed(1)), backgroundColor: '#a855f7' }] }, options: { scales: { y: { min: 0, max: 100 } }, maintainAspectRatio: false } });
+        const longLabels = Object.keys(longDiffStats).sort();
+        new Chart(destroy(containers.longDiffChart), { type: 'bar', data: { labels: longLabels, datasets: [{ label: '得分率 (%)', data: longLabels.map(k => longDiffStats[k].max===0 ? 0 : ((longDiffStats[k].got/longDiffStats[k].max)*100).toFixed(1)), backgroundColor: '#fd7e14' }] }, options: { scales: { y: { min: 0, max: 100 } }, maintainAspectRatio: false } });
+
+        showLoading(false);
+    }
+
+    window.goToStudentAnalysis = (sid) => { const tabEl = document.querySelector('button[data-bs-target="#anal-student-tab"]'); const tab = new bootstrap.Tab(tabEl); tab.show(); document.getElementById('analStudentId').value = sid; performStudentAnalysis(); };
+    window.performStudentAnalysis = () => { const year = document.getElementById('analStudentYear').value; generateStudentReport(document.getElementById('analStudentId').value.trim(), { result: 'studentAnalResult', name: 'analStudentName', info: 'analStudentInfo', report: 'aiDiagnosticReport', scoreTable: 'studentScoreTableBody', topicTable: 'studentTopicTable', trendChart: 'studentTrendChart', typeBar: 'studentTypeBar', mcDiffChart: 'studentMCDiffChart', longDiffChart: 'studentLongDiffChart' }, year); };
+    document.getElementById('myStudentYear').addEventListener('change', () => { const sid = currentUser.email.split('@')[0]; const year = document.getElementById('myStudentYear').value; generateStudentReport(sid, { result: 'studentApp', name: 'myStudentName', info: 'myStudentInfo', report: 'myAiReport', scoreTable: 'myScoreTableBody', topicTable: 'myTopicTable', typeBar: 'myTypeBar', mcDiffChart: 'myMCDiffChart', longDiffChart: 'myLongDiffChart' }, year); });
+    
+    // NEW: My Student Group Filter Logic
+    document.getElementById('myStudentGroupFilter').addEventListener('change', () => {
+        const sid = currentUser.email.split('@')[0];
+        const year = document.getElementById('myStudentYear').value;
+        const groupFilter = document.getElementById('myStudentGroupFilter').value;
+        generateStudentReport(sid, { result: 'studentApp', name: 'myStudentName', info: 'myStudentInfo', report: 'myAiReport', scoreTable: 'myScoreTableBody', topicTable: 'myTopicTable', typeBar: 'myTypeBar', mcDiffChart: 'myMCDiffChart', longDiffChart: 'myLongDiffChart' }, year);
+    });
+    
+    // Student Year Filter
+    document.getElementById('myStudentYear').addEventListener('change', () => {
+        const sid = currentUser.email.split('@')[0];
+        const year = document.getElementById('myStudentYear').value;
+        generateStudentReport(sid, { result: 'studentApp', name: 'myStudentName', info: 'myStudentInfo', report: 'myAiReport', scoreTable: 'myScoreTableBody', topicTable: 'myTopicTable', typeBar: 'myTypeBar', mcDiffChart: 'myMCDiffChart', longDiffChart: 'myLongDiffChart' }, year);
+    });
+
+    async function initStudentView(user) { currentUser = user; const sid = user.email.split('@')[0]; document.getElementById('studentApp').classList.remove('d-none'); try { 
+        let grpSnap;
+        try { grpSnap = await get(ref(db, 'groups')); } catch(e) { console.warn("Groups metadata read denied", e); }
+        groupsMetaMap = grpSnap ? (grpSnap.val() || {}) : {};
+
+        const sysSnap = await get(ref(db, 'system')); if(sysSnap.exists()) { const sysVal = sysSnap.val(); currentSystemYear = sysVal.currentYear; allYears = sysVal.years || []; updateYearSelectors(); } const stuSnap = await get(ref(db, `students/${sid}`)); const sName = stuSnap.val() ? stuSnap.val().name : sid; studentsMap[sid] = { name: sName }; const assessSnap = await get(ref(db, 'assessments')); assessmentsMap = assessSnap.val() || {}; generateStudentReport(sid, { result: 'studentApp', name: 'myStudentName', info: 'myStudentInfo', report: 'myAiReport', scoreTable: 'myScoreTableBody', topicTable: 'myTopicTable', trendChart: 'myTrendChart', typeBar: 'myTypeBar', mcDiffChart: 'myMCDiffChart', longDiffChart: 'myLongDiffChart' }, currentSystemYear); } catch (error) { console.error(error); showMsg("錯誤", "資料載入失敗"); } }
+
+</script>
+</body>
+</html>
